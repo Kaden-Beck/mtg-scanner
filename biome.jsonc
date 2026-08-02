@@ -39,6 +39,11 @@
       },
       "suspicious": {
         "noExplicitAny": "off"
+      },
+      "complexity": {
+        // Conflicts with the tsconfig noPropertyAccessFromIndexSignature
+        // flag, which requires bracket notation for process.env.* access.
+        "useLiteralKeys": "off"
       }
     }
   }

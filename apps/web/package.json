@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "typecheck:tsgo": "tsgo --noEmit"
+    "typecheck:tsgo": "tsgo --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --experimental-strip-types src/server/db/migrate.ts"
   },
   "dependencies": {
     "@mtg/schemas": "workspace:*",
