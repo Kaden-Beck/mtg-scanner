@@ -1,0 +1,20 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Binds to the host's LAN interfaces only (not a public one) - reachable
+    # from any device on the same private network, e.g. a phone, and nothing
+    # else. Nothing here opens a path to the public internet; that would
+    # require an explicit port-forward or reverse proxy on the host/router,
+    # which this compose file deliberately does not set up (KAD-7 AC2).
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      DATABASE_PATH: /data/mtg.db
+    volumes:
+      - mtg-data:/data
+    restart: unless-stopped
+
+volumes:
+  mtg-data:
