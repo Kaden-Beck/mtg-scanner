@@ -44,7 +44,7 @@ pnpm --filter web dev
 
 ## Project structure
 
-```
+```text
 apps/web       Next.js app - UI, API routes, DB access, ingest jobs
 apps/worker    GPU inference worker (scanning; not yet implemented)
 packages/schemas   Branded ids, Zod schemas, shared domain types

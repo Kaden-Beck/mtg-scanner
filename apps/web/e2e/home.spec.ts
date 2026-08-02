@@ -18,5 +18,15 @@ test("shows an actionable setup prompt before the first successful sync (AC4)", 
   for (const label of ["Cards", "Prices", "Hash index"]) {
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   }
-  await expect(page.getByRole("button", { name: "Sync now" })).toBeEnabled();
+
+  // Prices also has its own "Sync now" button as of KAD-11 - scope to the
+  // Cards row specifically rather than assuming there's only one.
+  const cardsRow = page.getByRole("listitem").filter({ hasText: "Cards" });
+  await expect(cardsRow.getByRole("button", { name: "Sync now" })).toBeEnabled();
+
+  const pricesRow = page.getByRole("listitem").filter({ hasText: "Prices" });
+  await expect(pricesRow.getByRole("button", { name: "Sync now" })).toBeEnabled();
+
+  const hashIndexRow = page.getByRole("listitem").filter({ hasText: "Hash index" });
+  await expect(hashIndexRow.getByText("Not yet available")).toBeVisible();
 });

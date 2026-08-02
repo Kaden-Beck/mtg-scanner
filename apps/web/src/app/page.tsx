@@ -1,4 +1,6 @@
+import Link from "next/link";
 import type { SyncType } from "@/server/db/schema";
+import { countOpenReconciliationRows } from "@/server/import/reconciliation";
 import { triggerCardSync, triggerPriceRefresh } from "@/server/sync/actions";
 import { getSyncStatuses, type SyncStatusView } from "@/server/sync/status";
 import { formatDateTime, statusBadgeClass, statusLabel } from "./sync-status-format";
@@ -63,10 +65,26 @@ export default async function Home() {
   const statuses = await getSyncStatuses();
   const cardsStatus = statuses.find((s) => s.syncType === "cards");
   const needsSetup = cardsStatus?.rowCount === null;
+  const openReconciliationCount = countOpenReconciliationRows();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
       <h1 className="text-2xl font-semibold">MTG Scanner</h1>
+
+      {openReconciliationCount > 0 && (
+        <Link
+          href="/reconciliation"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950"
+        >
+          <p className="font-medium text-amber-900 dark:text-amber-200">
+            {openReconciliationCount} row{openReconciliationCount === 1 ? "" : "s"} need review
+          </p>
+          <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+            Some rows from a collection import couldn&apos;t be matched to a printing. Review the
+            reconciliation queue.
+          </p>
+        </Link>
+      )}
 
       {needsSetup && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950">

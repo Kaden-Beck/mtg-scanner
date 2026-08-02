@@ -9,10 +9,12 @@ why the toolchain is shaped the way it is, and the Linear project
 - **No Node.js on the host** (immutable Fedora-family system). All
   node/npm/pnpm work happens inside a container. Pattern used throughout
   Sprint 1:
+
   ```sh
   podman run -d --name mtg-dev -v "$(pwd)":/workspace:Z -w /workspace node:22 sleep infinity
   podman exec mtg-dev sh -c "cd /workspace && <command>"
   ```
+  
   A single long-lived container (not a fresh one per command) avoids
   re-pulling/re-initializing on every invocation.
 - pnpm workspace; `corepack enable` provisions the pinned pnpm version.
