@@ -8,7 +8,9 @@
       "!**/dist",
       "!**/*.sqlite*",
       // Static/vendor assets, not authored code - not our lint concern.
-      "!apps/web/public"
+      "!apps/web/public",
+      // Local Claude Code settings, gitignored globally rather than per-repo.
+      "!.claude"
     ]
   },
   "formatter": {

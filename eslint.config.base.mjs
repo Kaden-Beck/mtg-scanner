@@ -27,6 +27,14 @@ export function baseConfig(tsconfigRootDir) {
       },
       rules: {
         "@typescript-eslint/consistent-type-assertions": ["error", { assertionStyle: "never" }],
+        "@typescript-eslint/no-unused-vars": [
+          "error",
+          {
+            argsIgnorePattern: "^_",
+            varsIgnorePattern: "^_",
+            destructuredArrayIgnorePattern: "^_",
+          },
+        ],
       },
     },
     {

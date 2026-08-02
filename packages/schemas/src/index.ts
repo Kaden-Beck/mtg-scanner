@@ -19,3 +19,8 @@ export {
   scryfallIdSchema,
   setCodeSchema,
 } from "./ids";
+export {
+  isCollectibleCard,
+  type ScryfallCard,
+  scryfallCardSchema,
+} from "./scryfall-card";

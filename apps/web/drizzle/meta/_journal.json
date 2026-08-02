@@ -8,6 +8,13 @@
       "when": 1785684193359,
       "tag": "0000_easy_whistler",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785684599149,
+      "tag": "0001_public_mindworm",
+      "breakpoints": true
     }
   ]
 }

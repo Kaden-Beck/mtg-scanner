@@ -10,7 +10,8 @@ export const cards = sqliteTable(
   "cards",
   {
     id: text("id").primaryKey(), // ScryfallId
-    oracleId: text("oracle_id").notNull(),
+    // Nullable: reversible_card layout keeps oracle_id per-face, not top-level.
+    oracleId: text("oracle_id"),
     name: text("name").notNull(),
     layout: text("layout").notNull(),
     manaCost: text("mana_cost"),

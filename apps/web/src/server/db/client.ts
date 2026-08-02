@@ -4,8 +4,12 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "./schema";
 
-const DEFAULT_DB_PATH = path.join(process.cwd(), "data", "mtg.db");
-const MIGRATIONS_FOLDER = path.join(process.cwd(), "drizzle");
+// Resolved from this file's own location, not process.cwd() - the db client
+// can be imported from processes whose cwd isn't apps/web (e.g. a test
+// runner invoked from the repo root).
+const APP_ROOT = path.join(import.meta.dirname, "../../..");
+const DEFAULT_DB_PATH = path.join(APP_ROOT, "data", "mtg.db");
+const MIGRATIONS_FOLDER = path.join(APP_ROOT, "drizzle");
 
 function openSqlite(): Database.Database {
   const dbPath = process.env["DATABASE_PATH"] ?? DEFAULT_DB_PATH;

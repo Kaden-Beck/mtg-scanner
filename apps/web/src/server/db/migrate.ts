@@ -10,8 +10,9 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
  * `next dev`, so this is safe to run redundantly; drizzle's migrator tracks
  * applied migrations and no-ops on the rest.
  */
-const dbPath = process.env["DATABASE_PATH"] ?? path.join(process.cwd(), "data", "mtg.db");
-const migrationsFolder = path.join(process.cwd(), "drizzle");
+const appRoot = path.join(import.meta.dirname, "../../..");
+const dbPath = process.env["DATABASE_PATH"] ?? path.join(appRoot, "data", "mtg.db");
+const migrationsFolder = path.join(appRoot, "drizzle");
 
 const sqlite = new Database(dbPath);
 sqlite.pragma("journal_mode = WAL");
