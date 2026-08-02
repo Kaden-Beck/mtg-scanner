@@ -1,0 +1,45 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "**",
+      "!**/.next",
+      "!**/dist",
+      "!**/*.sqlite*",
+      // Static/vendor assets, not authored code - not our lint concern.
+      "!apps/web/public"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  },
+  "css": {
+    "parser": {
+      // Tailwind v4's `@theme` at-rule in globals.css.
+      "tailwindDirectives": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      // Type-aware correctness rules are typescript-eslint's job (ADR-006/S1
+      // scaffold): strictTypeChecked catches these with full type info,
+      // which Biome cannot do. Keep Biome to fast syntax/formatting checks.
+      "correctness": {
+        "noUnusedVariables": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off"
+      }
+    }
+  }
+}

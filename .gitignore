@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+.pnpm-store/
+
+# build output
+.next/
+out/
+dist/
+build/
+
+# testing
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+next-env.d.ts
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# local sqlite data / dev volumes
+/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# scryfall bulk data cache
+/apps/web/.cache/
