@@ -42,6 +42,52 @@ pnpm --filter web dev
 - `pnpm --filter web db:generate` - generate a new Drizzle migration after
   editing `apps/web/src/server/db/schema.ts`.
 
+## Backup & Restore
+
+Trigger a backup at any time - the app stays fully up and serving requests
+the whole time (it uses SQLite's online backup API, not a raw file copy):
+
+```sh
+curl -X POST http://localhost:3000/api/backup
+```
+
+This writes a timestamped, self-contained snapshot (`mtg-backup-<ISO
+timestamp>.db`) to `BACKUP_DIR` (default: a `backups/` folder next to the
+live database - inside the `mtg-data` volume for the Compose setup, so it
+survives container restarts alongside the DB it's backing up). For real
+disaster-recovery coverage - not just "I fat-fingered a delete" - copy
+backup files off the volume periodically, e.g.:
+
+```sh
+docker compose cp web:/data/backups/<file> ./local-backups/
+```
+
+### Restoring
+
+Restoring **must** happen with the app stopped - a live process holds the
+database's WAL file open, and writing underneath it would just get
+overwritten on the next checkpoint.
+
+```sh
+docker compose stop web
+docker compose run --rm -e DATABASE_PATH=/data/mtg.db web \
+  node --experimental-strip-types src/server/db/restore-cli.ts /data/backups/<file>
+docker compose start web
+```
+
+Outside Compose (local dev), the same script works directly:
+
+```sh
+DATABASE_PATH=./apps/web/data/mtg.db \
+  node --experimental-strip-types apps/web/src/server/db/restore-cli.ts <backup-file>
+```
+
+This has been run for real (KAD-15) - not just covered by a mocked test -
+against a live instance: seed data through the running API, back it up
+while the app kept serving requests, restore that file into a completely
+separate fresh instance, and confirm the two instances' collection data
+matched exactly.
+
 ## Project structure
 
 ```text

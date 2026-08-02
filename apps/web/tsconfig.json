@@ -7,6 +7,12 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Standalone scripts run via `node --experimental-strip-types` (e.g.
+    // db/restore-cli.ts) need explicit `.ts` extensions on relative
+    // imports - Node's ESM loader doesn't do TS-style extensionless
+    // resolution. Safe since noEmit is already true (typecheck-only; Next
+    // itself handles bundling/transpilation for the app proper).
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

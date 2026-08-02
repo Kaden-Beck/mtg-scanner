@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:tsgo": "tsgo --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --experimental-strip-types src/server/db/migrate.ts"
+    "db:migrate": "node --experimental-strip-types src/server/db/migrate.ts",
+    "db:restore": "node --experimental-strip-types src/server/db/restore-cli.ts"
   },
   "dependencies": {
     "@mtg/schemas": "workspace:*",

@@ -46,3 +46,15 @@ function getDb() {
 }
 
 export const db = getDb();
+
+/**
+ * The raw better-sqlite3 handle, for operations Drizzle doesn't wrap (e.g.
+ * the online backup API - server/backup/backup.ts). `getDb()` always
+ * populates `globalThis.__mtgSqlite` as a side effect before this can be
+ * called, since `db` above is initialized first in module evaluation order.
+ */
+export function getSqlite(): Database.Database {
+  const sqlite = globalThis.__mtgSqlite;
+  if (!sqlite) throw new Error("sqlite handle unavailable - getDb() should have set it");
+  return sqlite;
+}
