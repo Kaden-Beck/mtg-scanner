@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { db } from "../db/client";
 import { SYNC_TYPES, type SyncStateRow, type SyncType, syncState } from "../db/schema";
+import { isStale } from "./staleness";
 
 export interface SyncStatusView {
   syncType: SyncType;
@@ -11,6 +12,7 @@ export interface SyncStatusView {
   lastSyncedAt: Date | null;
   errorMessage: string | null;
   triggerable: boolean;
+  stale: boolean;
 }
 
 const SYNC_TYPE_LABELS: Record<SyncType, string> = {
@@ -19,12 +21,11 @@ const SYNC_TYPE_LABELS: Record<SyncType, string> = {
   hash_index: "Hash index",
 };
 
-// Only the card sync job exists yet (KAD-8). Prices (KAD-11) and the hash
-// index build (KAD-24) land in later sprints - shown here so the status
-// page's shape doesn't change out from under KAD-9 when they do.
+// The hash index build (KAD-24) lands in a later sprint - shown here so the
+// status page's shape doesn't change out from under KAD-9 when it does.
 const TRIGGERABLE: Record<SyncType, boolean> = {
   cards: true,
-  prices: false,
+  prices: true,
   hash_index: false,
 };
 
@@ -44,17 +45,20 @@ export async function getSyncStatuses(): Promise<SyncStatusView[]> {
   const rows = db.select().from(syncState).all();
   const bySyncType = new Map(rows.map((row) => [row.syncType, row]));
 
+  const now = new Date();
   return SYNC_TYPES.map((syncType) => {
     const row = bySyncType.get(syncType);
+    const lastSyncedAt = row?.lastSyncedAt ?? null;
     return {
       syncType,
       label: SYNC_TYPE_LABELS[syncType],
       status: row?.status ?? "never_run",
       rowCount: row?.rowCount ?? null,
       sourceTimestamp: row?.sourceTimestamp ?? null,
-      lastSyncedAt: row?.lastSyncedAt ?? null,
+      lastSyncedAt,
       errorMessage: row?.errorMessage ?? null,
       triggerable: TRIGGERABLE[syncType],
+      stale: isStale(lastSyncedAt, now),
     };
   });
 }

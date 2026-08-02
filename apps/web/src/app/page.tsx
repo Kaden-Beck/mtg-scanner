@@ -1,8 +1,18 @@
-import { triggerCardSync } from "@/server/sync/actions";
+import type { SyncType } from "@/server/db/schema";
+import { triggerCardSync, triggerPriceRefresh } from "@/server/sync/actions";
 import { getSyncStatuses, type SyncStatusView } from "@/server/sync/status";
 import { formatDateTime, statusBadgeClass, statusLabel } from "./sync-status-format";
 
+// hash_index (KAD-24) has no job to trigger yet - omitted rather than given
+// a no-op action.
+const TRIGGER_ACTIONS: Partial<Record<SyncType, () => Promise<void>>> = {
+  cards: triggerCardSync,
+  prices: triggerPriceRefresh,
+};
+
 function SyncRow({ view }: { view: SyncStatusView }) {
+  const triggerAction = view.triggerable ? TRIGGER_ACTIONS[view.syncType] : undefined;
+
   return (
     <li className="flex flex-col gap-2 border-b border-zinc-200 py-4 last:border-none dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
       <div>
@@ -13,6 +23,11 @@ function SyncRow({ view }: { view: SyncStatusView }) {
           >
             {statusLabel(view.status)}
           </span>
+          {view.stale && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              Stale
+            </span>
+          )}
         </div>
         <dl className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           <span>Last synced: {formatDateTime(view.lastSyncedAt)}</span>
@@ -21,9 +36,14 @@ function SyncRow({ view }: { view: SyncStatusView }) {
             <div className="mt-1 text-red-700 dark:text-red-400">{view.errorMessage}</div>
           )}
         </dl>
+        {view.syncType === "prices" && (
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+            Prices are estimates for trends only, not authoritative market values.
+          </p>
+        )}
       </div>
-      {view.syncType === "cards" ? (
-        <form action={triggerCardSync}>
+      {triggerAction ? (
+        <form action={triggerAction}>
           <button
             type="submit"
             disabled={view.status === "running"}

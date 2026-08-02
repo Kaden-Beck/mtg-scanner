@@ -4,36 +4,19 @@ import { createGunzip } from "node:zlib";
 import { isCollectibleCard, scryfallCardSchema } from "@mtg/schemas";
 import { sql } from "drizzle-orm";
 import { db } from "../db/client";
-import { cards, type NewCardRow, syncState } from "../db/schema";
+import { cards, type NewCardRow } from "../db/schema";
 import { rebuildCardsFts } from "../search/fts";
+import { markSyncResult, markSyncRunning } from "../sync/sync-state";
 import { fetchBulkDataMeta } from "./bulk-data-meta";
 import { toCardRow } from "./card-row-mapper";
 import { SCRYFALL_REQUEST_HEADERS } from "./user-agent";
+import { iterateWebStream } from "./web-stream";
 
 // SQLite caps bound parameters per statement (SQLITE_MAX_VARIABLE_NUMBER).
 // `cards` has ~36 columns, so 1000 rows/batch means ~36k params - well past
 // the limit. Found by running this against the real bulk file, not the
 // batch size that made the mocked (2-row) tests pass. Sized with headroom.
 const BATCH_SIZE = 200;
-
-/**
- * `Readable.fromWeb` expects `node:stream/web`'s `ReadableStream`, which is
- * nominally distinct from lib.dom's (what `fetch`'s `Response.body` is typed
- * as) even though they're the same shape at runtime - draining the reader by
- * hand sidesteps that mismatch instead of asserting past it.
- */
-async function* iterateWebStream(body: ReadableStream<Uint8Array>): AsyncGenerator<Uint8Array> {
-  const reader = body.getReader();
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) return;
-      yield value;
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
 
 // Column -> `excluded.<col>` for every column except the conflict target
 // (`id`) and `created_at`, which should keep its original value across a
@@ -86,48 +69,6 @@ export interface CardSyncResult {
   sourceTimestamp: string;
 }
 
-async function markRunning(): Promise<void> {
-  await db
-    .insert(syncState)
-    .values({ syncType: "cards", status: "running", updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: syncState.syncType,
-      set: { status: "running", updatedAt: new Date() },
-    });
-}
-
-async function markResult(
-  result:
-    | { status: "success"; rowCount: number; sourceTimestamp: string }
-    | { status: "error"; errorMessage: string },
-): Promise<void> {
-  const now = new Date();
-  await db
-    .insert(syncState)
-    .values({
-      syncType: "cards",
-      status: result.status,
-      updatedAt: now,
-      ...(result.status === "success"
-        ? { rowCount: result.rowCount, sourceTimestamp: result.sourceTimestamp, lastSyncedAt: now }
-        : { errorMessage: result.errorMessage }),
-    })
-    .onConflictDoUpdate({
-      target: syncState.syncType,
-      set:
-        result.status === "success"
-          ? {
-              status: "success",
-              rowCount: result.rowCount,
-              sourceTimestamp: result.sourceTimestamp,
-              lastSyncedAt: now,
-              errorMessage: null,
-              updatedAt: now,
-            }
-          : { status: "error", errorMessage: result.errorMessage, updatedAt: now },
-    });
-}
-
 /**
  * Streams Scryfall's `default_cards` bulk file (gzip-compressed JSONL - see
  * packages/schemas/src/scryfall-card.ts for how that was confirmed rather
@@ -136,7 +77,7 @@ async function markResult(
  * whole run (KAD-8 AC3).
  */
 export async function runCardSync(fetchImpl: typeof fetch = fetch): Promise<CardSyncResult> {
-  await markRunning();
+  await markSyncRunning("cards");
   try {
     const { downloadUri, sourceUpdatedAt } = await fetchBulkDataMeta("default_cards", fetchImpl);
 
@@ -176,11 +117,15 @@ export async function runCardSync(fetchImpl: typeof fetch = fetch): Promise<Card
     // search index passing silently.
     rebuildCardsFts();
 
-    await markResult({ status: "success", rowCount, sourceTimestamp: sourceUpdatedAt });
+    await markSyncResult("cards", {
+      status: "success",
+      rowCount,
+      sourceTimestamp: sourceUpdatedAt,
+    });
     return { rowCount, sourceTimestamp: sourceUpdatedAt };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    await markResult({ status: "error", errorMessage });
+    await markSyncResult("cards", { status: "error", errorMessage });
     throw error;
   }
 }
