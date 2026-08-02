@@ -1,3 +1,5 @@
+import { SUPPORTED_OPERATORS } from "./operators";
+
 /** Base class for anything `parseQuery` throws — never a silent bad parse. */
 export class QueryParseError extends Error {}
 
@@ -29,7 +31,9 @@ export class UnsupportedOperatorError extends QueryParseError {
   readonly operator: string;
 
   constructor(operator: string) {
-    super(`Unsupported search operator "${operator}:" — this app doesn't recognize it.`);
+    super(
+      `Unsupported search operator "${operator}:" — this app doesn't recognize it. Supported operators: ${SUPPORTED_OPERATORS.join(", ")}.`,
+    );
     this.name = "UnsupportedOperatorError";
     this.operator = operator;
   }

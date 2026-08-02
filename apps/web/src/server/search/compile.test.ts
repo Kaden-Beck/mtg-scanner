@@ -472,3 +472,55 @@ describe("compileQuery — explicit errors (KAD-18)", () => {
     expect(() => searchCollection(parseQuery("tag:combo"))).toThrow("Sprint 4 (KAD-22)");
   });
 });
+
+/**
+ * The end-to-end path a UI actually calls. Covered here rather than in a
+ * separate file so it reuses the fixture set above, and because the async
+ * Server Component that consumes it can't be unit-tested at all (ADR-007)
+ * - this is the deepest layer that can be.
+ */
+describe("runCollectionSearch", () => {
+  it("treats a blank or whitespace-only box as no filter, not an error", async () => {
+    const { runCollectionSearch } = await import("./collection-search");
+    for (const raw of ["", "   ", "\t\n"]) {
+      const outcome = runCollectionSearch(raw);
+      expect(outcome.ok).toBe(true);
+      expect(outcome.ok && outcome.rows).toHaveLength(STACK_FIXTURES.length);
+    }
+  });
+
+  it("returns filtered rows for a valid query", async () => {
+    const { runCollectionSearch } = await import("./collection-search");
+    const outcome = runCollectionSearch("c:rg t:instant");
+    expect(outcome.ok && outcome.rows.map((row) => row.card.name)).toEqual(["Manamorphose"]);
+  });
+
+  it("trims surrounding whitespace rather than failing on it", async () => {
+    const { runCollectionSearch } = await import("./collection-search");
+    expect(runCollectionSearch("  bolt  ").ok).toBe(true);
+  });
+
+  const errorCases: readonly [label: string, query: string, kind: string, messagePart: string][] = [
+    ["an unsupported operator", "power:3", "unsupported-operator", '"power:"'],
+    ["tag:, which is real but unbuilt", "tag:combo", "unimplemented-operator", "Sprint 4"],
+    ["a syntax error", "(c:r", "syntax", "Unclosed '('"],
+    ["a dangling boolean", "c:r AND", "syntax", "after 'AND'"],
+    // Compile-time failures reach the UI the same way parse-time ones do.
+    ["an unknown is: value", "is:bogus", "syntax", "isn't a supported filter"],
+    ["a non-numeric cmc", "cmc>=abc", "syntax", "needs a numeric value"],
+  ];
+
+  it.each(errorCases)("reports %s without throwing", async (_label, query, kind, messagePart) => {
+    const { runCollectionSearch } = await import("./collection-search");
+    const outcome = runCollectionSearch(query);
+    expect(outcome.ok).toBe(false);
+    expect(!outcome.ok && outcome.error.kind).toBe(kind);
+    expect(!outcome.ok && outcome.error.message).toContain(messagePart);
+  });
+
+  it("names the offending operator so the UI can point at it (AC2)", async () => {
+    const { runCollectionSearch } = await import("./collection-search");
+    const outcome = runCollectionSearch("c:r artist:rk");
+    expect(!outcome.ok && outcome.error.operator).toBe("artist");
+  });
+});

@@ -26,3 +26,13 @@ export const OPERATOR_ALIASES: Readonly<Record<string, OperatorKey>> = {
   tag: "tag",
   condition: "condition",
 };
+
+/**
+ * The canonical operator names, sorted, for "here's what you can use
+ * instead" messaging. Derived from the alias table rather than written out
+ * again, so a new operator can't be added and then quietly omitted from
+ * the error message that's supposed to list every supported one.
+ */
+export const SUPPORTED_OPERATORS: readonly OperatorKey[] = [
+  ...new Set(Object.values(OPERATOR_ALIASES)),
+].sort();
