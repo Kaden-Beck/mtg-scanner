@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -10,10 +11,14 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
  * `next dev`, so this is safe to run redundantly; drizzle's migrator tracks
  * applied migrations and no-ops on the rest.
  */
-const appRoot = path.join(import.meta.dirname, "../../..");
-const dbPath = process.env["DATABASE_PATH"] ?? path.join(appRoot, "data", "mtg.db");
-const migrationsFolder = path.join(appRoot, "drizzle");
+// process.cwd()-based, matching client.ts - this script is always invoked
+// with apps/web as the working directory (`db:migrate` script, container
+// entrypoint).
+const dbPath = process.env["DATABASE_PATH"] ?? path.join(process.cwd(), "data", "mtg.db");
+const migrationsFolder =
+  process.env["DRIZZLE_MIGRATIONS_FOLDER"] ?? path.join(process.cwd(), "drizzle");
 
+mkdirSync(path.dirname(dbPath), { recursive: true });
 const sqlite = new Database(dbPath);
 sqlite.pragma("journal_mode = WAL");
 

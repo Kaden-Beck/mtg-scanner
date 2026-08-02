@@ -16,6 +16,10 @@ beforeEach(() => {
   vi.resetModules();
   dir = mkdtempSync(join(tmpdir(), "mtg-ingest-test-"));
   process.env["DATABASE_PATH"] = join(dir, "test.db");
+  // client.ts resolves migrations relative to process.cwd(), which Next.js
+  // guarantees is apps/web at runtime - but this suite runs from the repo
+  // root, so point it at the real folder explicitly.
+  process.env["DRIZZLE_MIGRATIONS_FOLDER"] = join(import.meta.dirname, "../../../drizzle");
 });
 
 afterEach(() => {
@@ -27,6 +31,7 @@ afterEach(() => {
   globalThis.__mtgDb = undefined;
   rmSync(dir, { recursive: true, force: true });
   delete process.env["DATABASE_PATH"];
+  delete process.env["DRIZZLE_MIGRATIONS_FOLDER"];
 });
 
 const baseCard = {
