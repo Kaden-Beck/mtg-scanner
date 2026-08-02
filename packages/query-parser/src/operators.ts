@@ -1,4 +1,4 @@
-import type { OperatorKey } from "./ast.ts";
+import type { OperatorKey } from "./ast";
 
 /**
  * Every recognized operator key/alias, lowercased, mapped to its canonical
