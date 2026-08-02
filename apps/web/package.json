@@ -14,6 +14,7 @@
     "db:restore": "node --experimental-strip-types src/server/db/restore-cli.ts"
   },
   "dependencies": {
+    "@mtg/query-parser": "workspace:*",
     "@mtg/schemas": "workspace:*",
     "better-sqlite3": "13.0.2",
     "drizzle-orm": "0.45.2",

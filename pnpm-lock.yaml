@@ -47,6 +47,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@mtg/query-parser':
+        specifier: workspace:*
+        version: link:../../packages/query-parser
       '@mtg/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

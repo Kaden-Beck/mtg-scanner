@@ -67,6 +67,12 @@ export const cards = sqliteTable(
     index("cards_oracle_id_idx").on(table.oracleId),
     index("cards_name_idx").on(table.name),
     index("cards_set_collector_idx").on(table.setCode, table.collectorNumber),
+    // Single-column indexes for the search compiler (KAD-17): `set:` alone
+    // can't use the composite above as a prefix scan for equality on
+    // set_code plus an unrelated predicate, and `r:`/`cmc` had nothing.
+    index("cards_set_code_idx").on(table.setCode),
+    index("cards_rarity_idx").on(table.rarity),
+    index("cards_cmc_idx").on(table.cmc),
   ],
 );
 
