@@ -133,3 +133,95 @@ export const collectionItems = sqliteTable(
 
 export type CollectionItemRow = typeof collectionItems.$inferSelect;
 export type NewCollectionItemRow = typeof collectionItems.$inferInsert;
+
+export const IMPORT_SOURCES = ["archidekt"] as const;
+export type ImportSource = (typeof IMPORT_SOURCES)[number];
+
+export const IMPORT_BATCH_STATUSES = ["completed", "error"] as const;
+export type ImportBatchStatus = (typeof IMPORT_BATCH_STATUSES)[number];
+
+/**
+ * One row per import run (KAD-13). `fileHash` is how a re-upload of the
+ * same file is detected (AC3); `supersededByBatchId` marks a batch whose
+ * collection_items contributions were reversed and superseded by a later
+ * "replace" re-import, so its history stays visible instead of being
+ * deleted outright.
+ */
+export const importBatches = sqliteTable(
+  "import_batches",
+  {
+    id: text("id").primaryKey(),
+    source: text("source").notNull().$type<ImportSource>(),
+    fileName: text("file_name").notNull(),
+    fileHash: text("file_hash").notNull(),
+    status: text("status").notNull().$type<ImportBatchStatus>(),
+    totalRows: integer("total_rows").notNull(),
+    resolvedRows: integer("resolved_rows").notNull(),
+    unresolvedRows: integer("unresolved_rows").notNull(),
+    supersededByBatchId: text("superseded_by_batch_id"),
+    errorMessage: text("error_message"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("import_batches_file_hash_idx").on(table.fileHash)],
+);
+
+export type ImportBatchRow = typeof importBatches.$inferSelect;
+export type NewImportBatchRow = typeof importBatches.$inferInsert;
+
+/**
+ * Per-row record of what a batch contributed to a `collection_items` stack -
+ * `quantityDelta` is what a "replace" re-import subtracts back out before
+ * reapplying the file fresh, so replacing never double-counts (AC3).
+ */
+export const importBatchItems = sqliteTable(
+  "import_batch_items",
+  {
+    id: text("id").primaryKey(),
+    batchId: text("batch_id")
+      .notNull()
+      .references(() => importBatches.id),
+    collectionItemId: text("collection_item_id")
+      .notNull()
+      .references(() => collectionItems.id),
+    quantityDelta: integer("quantity_delta").notNull(),
+  },
+  (table) => [index("import_batch_items_batch_id_idx").on(table.batchId)],
+);
+
+export type ImportBatchItemRow = typeof importBatchItems.$inferSelect;
+export type NewImportBatchItemRow = typeof importBatchItems.$inferInsert;
+
+export const UNRESOLVED_REASONS = [
+  "insufficient_data",
+  "invalid_quantity",
+  "scryfall_id_not_found",
+  "no_matching_printing",
+  "ambiguous_printing",
+] as const;
+export type UnresolvedReason = (typeof UNRESOLVED_REASONS)[number];
+
+/**
+ * A CSV row that couldn't be resolved to exactly one printing - the
+ * reconciliation queue (KAD-14) reads this table. Never silently dropped
+ * (AC2): every unresolved row lands here with its original values preserved
+ * for one-tap resolution later.
+ */
+export const importReconciliationRows = sqliteTable(
+  "import_reconciliation_rows",
+  {
+    id: text("id").primaryKey(),
+    batchId: text("batch_id")
+      .notNull()
+      .references(() => importBatches.id),
+    rawRow: text("raw_row", { mode: "json" }).$type<Record<string, string>>().notNull(),
+    reason: text("reason").notNull().$type<UnresolvedReason>(),
+    candidateScryfallIds: text("candidate_scryfall_ids", { mode: "json" }).$type<string[]>(),
+    resolvedAt: integer("resolved_at", { mode: "timestamp_ms" }),
+    dismissedAt: integer("dismissed_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("import_reconciliation_rows_batch_id_idx").on(table.batchId)],
+);
+
+export type ImportReconciliationRowRow = typeof importReconciliationRows.$inferSelect;
+export type NewImportReconciliationRowRow = typeof importReconciliationRows.$inferInsert;

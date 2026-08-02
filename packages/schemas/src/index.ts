@@ -29,6 +29,7 @@ export {
   scryfallIdSchema,
   setCodeSchema,
 } from "./ids";
+export { type ImportArchidektRequest, importArchidektRequestSchema } from "./import";
 export {
   isCollectibleCard,
   type ScryfallCard,

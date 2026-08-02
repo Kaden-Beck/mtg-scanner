@@ -29,6 +29,13 @@
       "when": 1785689999000,
       "tag": "0003_cards_fts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785691990805,
+      "tag": "0004_hard_sheva_callister",
+      "breakpoints": true
     }
   ]
 }
