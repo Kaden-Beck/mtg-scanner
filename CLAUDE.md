@@ -65,6 +65,54 @@ up --build`), not just `pnpm test`.
 - **`eslint-plugin-react-hooks` 7.x flat config is at
   `configs.flat["recommended-latest"]`**, not `configs["recommended-latest"]`
   (that's the legacy eslintrc-format export and errors under flat config).
+- **`node --experimental-strip-types` needs explicit `.ts` extensions on
+  relative imports.** Unlike `tsc`/Vitest's `moduleResolution: "bundler"`,
+  Node's ESM loader doesn't do TS-style extensionless resolution —
+  `import { x } from "../y"` fails with `ERR_MODULE_NOT_FOUND` at runtime
+  even though it typechecks fine. Only bites standalone scripts that have
+  relative imports at all (`migrate.ts` never hit this — zero relative
+  imports). Fix is `allowImportingTsExtensions: true` in tsconfig (safe
+  when `noEmit` is already true) plus the `.ts` suffix in the import
+  itself, not duplicating the logic to dodge it. (`apps/web/src/server/db/
+  restore-cli.ts`)
+- **`next/server`'s `connection()` throws outside a real Next request
+  scope**, so a route handler that calls it (to opt out of Cache Components
+  prerendering, same as the `import.meta.dirname` entry above) can't be
+  unit-tested by directly invoking the exported `GET`/etc. function the way
+  a plain `POST`/`PATCH`/`DELETE` handler can — Playwright or a real
+  `next build`/`next start` is the only way to exercise that specific line.
+  Keep `connection()` calls in the thinnest possible wrapper and
+  contract-test the logic underneath it directly instead.
+- **`zod`'s `z.uuid()` enforces the actual version/variant nibbles**, not
+  just "looks like a UUID" — a placeholder like
+  `11111111-1111-1111-1111-111111111111` fails validation (`1` isn't a
+  legal variant nibble) while a `cards.id` plain-text column happily
+  accepts it. Only surfaces once a value crosses a schema boundary that
+  actually validates it; use a real `crypto.randomUUID()`-shaped fixture
+  instead of a memorable repeated-digit one in tests.
+- **Playwright tests need to actually run, not just exist.** Two real bugs
+  only surfaced by installing Chromium and running `pnpm test:e2e` for
+  real: an existing test assumed there was exactly one "Sync now" button
+  (broke once Prices got its own), and a new test wasn't idempotent against
+  re-runs because the dev server's DB persists between runs and one story's
+  duplicate-file detection hashed the fixture's fixed content. Vitest alone
+  would never have caught either.
+- **A `sqliteTable()` foreign key needs its parent row to exist before any
+  child-row insert, including mid-loop within the same function** — not
+  just "before the function returns." A batch-import job that built up
+  counts across a loop and only inserted its own summary/parent row
+  *after* the loop, while child rows referencing it were inserted *during*
+  the loop, hit `FOREIGN KEY constraint failed` immediately. Fix: insert
+  the parent row first (with placeholder values), then update it with
+  final counts once the loop completes.
+- **drizzle-kit's migrator only reads `meta/_journal.json` + the `.sql`
+  files to apply migrations — never the snapshot.** The snapshot is only
+  used by `db:generate` to compute the *next* diff. This means a
+  hand-written migration (e.g. for a SQLite virtual table like FTS5, which
+  `sqliteTable()` has no representation for) can be added with just a `.sql`
+  file plus a manually-appended journal entry, and it stays completely
+  invisible to future `db:generate` runs since those only diff declared
+  `schema.ts` tables against the snapshot. (`apps/web/drizzle/0003_cards_fts.sql`)
 
 ## Testing conventions
 
@@ -98,3 +146,7 @@ up --build`), not just `pnpm test`.
   don't batch this to the end.
 - Sprint 1 (R1 · Foundation, all 6 stories) shipped via PR #1, merged
   2026-08-02.
+- Sprint 2 (R1 · Foundation, all 6 stories: KAD-12, KAD-10, KAD-11, KAD-13,
+  KAD-14, KAD-15) shipped 2026-08-02 via direct commits to `main`, per the
+  working agreement's default (no PR unless explicitly asked). 18/18
+  committed points landed, none rolled over.
