@@ -22,6 +22,13 @@
       "when": 1785689271016,
       "tag": "0002_plain_joseph",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785689999000,
+      "tag": "0003_cards_fts",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import { isCollectibleCard, scryfallCardSchema } from "@mtg/schemas";
 import { sql } from "drizzle-orm";
 import { db } from "../db/client";
 import { cards, type NewCardRow, syncState } from "../db/schema";
+import { rebuildCardsFts } from "../search/fts";
 import { fetchBulkDataMeta } from "./bulk-data-meta";
 import { toCardRow } from "./card-row-mapper";
 import { SCRYFALL_REQUEST_HEADERS } from "./user-agent";
@@ -169,6 +170,11 @@ export async function runCardSync(fetchImpl: typeof fetch = fetch): Promise<Card
       upsertBatch(batch);
       rowCount += batch.length;
     }
+
+    // Full rebuild (KAD-10), not incremental - see server/search/fts.ts. A
+    // rebuild failure fails the whole sync rather than leaving a stale
+    // search index passing silently.
+    rebuildCardsFts();
 
     await markResult({ status: "success", rowCount, sourceTimestamp: sourceUpdatedAt });
     return { rowCount, sourceTimestamp: sourceUpdatedAt };
