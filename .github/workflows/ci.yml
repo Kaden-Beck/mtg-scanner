@@ -55,6 +55,37 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 
+  # KAD-6: catches the specific failure mode of better-sqlite3's native addon
+  # going missing from the built image (e.g. `npm ci --ignore-scripts`) -
+  # unit tests run against a locally `pnpm install`ed node_modules and can't
+  # see that. Builds the real container and hits a route that touches SQLite.
+  docker-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build
+      - name: Wait for the app to come up
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/sync/status >/dev/null; then
+              echo "Up after ${i}s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::App never became ready"
+          docker compose logs
+          exit 1
+      - name: Hit a DB-backed route
+        run: |
+          curl -sf http://localhost:3000/api/sync/status | tee /tmp/status.json
+          grep -q '"syncType":"cards"' /tmp/status.json
+      - name: Container logs
+        if: failure()
+        run: docker compose logs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   # ADR-006: tsgo does not yet have a stable programmatic API, so it cannot
   # back typescript-eslint's type-aware rules. Run it as a fast, informational
   # signal only — never gate the merge on it.
