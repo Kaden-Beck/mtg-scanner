@@ -15,6 +15,13 @@
       "when": 1785684599149,
       "tag": "0001_public_mindworm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785689271016,
+      "tag": "0002_plain_joseph",
+      "breakpoints": true
     }
   ]
 }

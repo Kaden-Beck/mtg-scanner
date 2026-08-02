@@ -33,11 +33,17 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# local sqlite data / dev volumes
+# local sqlite data / dev volumes - db/client.ts defaults to
+# process.cwd()/data, and cwd is apps/web for `next dev`/`next build`, not
+# the repo root, so both paths need covering.
 /data/
+/apps/web/data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
 
 # scryfall bulk data cache
 /apps/web/.cache/

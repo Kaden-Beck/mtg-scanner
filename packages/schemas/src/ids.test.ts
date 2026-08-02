@@ -1,5 +1,11 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { type OracleId, oracleIdSchema, type ScryfallId, scryfallIdSchema } from "./ids";
+import {
+  collectionItemIdSchema,
+  type OracleId,
+  oracleIdSchema,
+  type ScryfallId,
+  scryfallIdSchema,
+} from "./ids";
 
 const validUuid = "b7c5c5e4-6b1a-4c1a-9c1a-8f2e6c1a0001";
 
@@ -23,5 +29,10 @@ describe("branded ids", () => {
 
     // A raw string does not satisfy a branded id - it must be parsed.
     expectTypeOf<string>().not.toEqualTypeOf<ScryfallId>();
+  });
+
+  it("parses a valid UUID into a CollectionItemId", () => {
+    const id = collectionItemIdSchema.parse(validUuid);
+    expect(id).toBe(validUuid);
   });
 });

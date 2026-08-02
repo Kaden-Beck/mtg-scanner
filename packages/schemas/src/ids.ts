@@ -20,3 +20,6 @@ export type SetCode = z.infer<typeof setCodeSchema>;
 
 export const collectorNumberSchema = z.string().min(1).brand<"CollectorNumber">();
 export type CollectorNumber = z.infer<typeof collectorNumberSchema>;
+
+export const collectionItemIdSchema = z.uuid().brand<"CollectionItemId">();
+export type CollectionItemId = z.infer<typeof collectionItemIdSchema>;

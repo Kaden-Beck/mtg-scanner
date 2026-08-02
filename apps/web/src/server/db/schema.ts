@@ -1,4 +1,13 @@
-import { blob, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import type { Condition, Finish } from "@mtg/schemas";
+import {
+  blob,
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 /**
  * One row per Scryfall printing (not per oracle card - reprints get
@@ -83,3 +92,44 @@ export const syncState = sqliteTable("sync_state", {
 
 export type SyncStateRow = typeof syncState.$inferSelect;
 export type NewSyncStateRow = typeof syncState.$inferInsert;
+
+/**
+ * One row per physically distinct stack of identical copies (KAD-12). The
+ * unique index below - not `binderLocation`/`language` being nullable - is
+ * what makes adding the same card twice increment quantity instead of
+ * creating a second row: SQLite treats each NULL in a unique index as
+ * distinct from every other NULL, which would silently defeat the dedup, so
+ * both columns are NOT NULL with an empty-string/"en" default applied at the
+ * Zod boundary rather than relying on NULL as "unset".
+ */
+export const collectionItems = sqliteTable(
+  "collection_items",
+  {
+    id: text("id").primaryKey(), // CollectionItemId
+    scryfallId: text("scryfall_id")
+      .notNull()
+      .references(() => cards.id),
+    finish: text("finish").notNull().$type<Finish>(),
+    condition: text("condition").notNull().$type<Condition>(),
+    quantity: integer("quantity").notNull(),
+    isProxy: integer("is_proxy", { mode: "boolean" }).notNull(),
+    binderLocation: text("binder_location").notNull(),
+    language: text("language").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("collection_items_stack_idx").on(
+      table.scryfallId,
+      table.finish,
+      table.condition,
+      table.isProxy,
+      table.binderLocation,
+      table.language,
+    ),
+    index("collection_items_scryfall_id_idx").on(table.scryfallId),
+  ],
+);
+
+export type CollectionItemRow = typeof collectionItems.$inferSelect;
+export type NewCollectionItemRow = typeof collectionItems.$inferInsert;

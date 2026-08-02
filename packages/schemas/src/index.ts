@@ -10,7 +10,17 @@ export {
   finishSchema,
 } from "./card-attributes";
 export {
+  type CollectionItemResponse,
+  type CreateCollectionItemRequest,
+  collectionItemResponseSchema,
+  createCollectionItemRequestSchema,
+  type UpdateCollectionItemRequest,
+  updateCollectionItemRequestSchema,
+} from "./collection-item";
+export {
+  type CollectionItemId,
   type CollectorNumber,
+  collectionItemIdSchema,
   collectorNumberSchema,
   type OracleId,
   oracleIdSchema,

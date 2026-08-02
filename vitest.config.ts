@@ -12,6 +12,9 @@ export default defineConfig({
   test: {
     projects: [
       {
+        resolve: {
+          tsconfigPaths: true,
+        },
         test: {
           name: "node",
           environment: "node",
@@ -19,6 +22,9 @@ export default defineConfig({
         },
       },
       {
+        resolve: {
+          tsconfigPaths: true,
+        },
         plugins: [react()],
         test: {
           name: "jsdom",
