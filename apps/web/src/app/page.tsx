@@ -39,8 +39,8 @@ function SyncRow({ view }: { view: SyncStatusView }) {
   );
 }
 
-export default function Home() {
-  const statuses = getSyncStatuses();
+export default async function Home() {
+  const statuses = await getSyncStatuses();
   const cardsStatus = statuses.find((s) => s.syncType === "cards");
   const needsSetup = cardsStatus?.rowCount === null;
 

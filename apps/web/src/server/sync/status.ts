@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { db } from "../db/client";
 import { SYNC_TYPES, type SyncStateRow, type SyncType, syncState } from "../db/schema";
 
@@ -31,8 +32,15 @@ const TRIGGERABLE: Record<SyncType, boolean> = {
  * Every sync type is always represented, even before its first run - AC4
  * requires an actionable setup prompt, never an empty state, for a sync
  * that has never succeeded.
+ *
+ * `connection()` opts this out of static prerendering: better-sqlite3 is
+ * synchronous, so without it Next would happily read sync_state once at
+ * build time and bake that snapshot into a static page forever (confirmed
+ * by actually building the image - `next build` reported `/` as prerendered
+ * static content until this was added).
  */
-export function getSyncStatuses(): SyncStatusView[] {
+export async function getSyncStatuses(): Promise<SyncStatusView[]> {
+  await connection();
   const rows = db.select().from(syncState).all();
   const bySyncType = new Map(rows.map((row) => [row.syncType, row]));
 
