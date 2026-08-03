@@ -34,13 +34,94 @@ export function parseViewMode(value: SearchParamValue): ViewMode {
   return isViewMode(raw) ? raw : "grid";
 }
 
-/** Builds a link to this page preserving the other control's state. */
-export function collectionHref(query: string, view: ViewMode): string {
+/**
+ * Builds a link to this page preserving the other control's state. `extra`
+ * carries transient params (the binder conflict notice) that aren't part of
+ * the page's own controls.
+ *
+ * Every redirect out of a server action goes through here, so the path is
+ * always `/collection` by construction - the action never redirects to a
+ * URL the client supplied.
+ */
+export function collectionHref(
+  query: string,
+  view: ViewMode,
+  extra: Readonly<Record<string, string>> = {},
+): string {
   const params = new URLSearchParams();
   if (query !== "") params.set("q", query);
   if (view !== "grid") params.set("view", view);
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== "") params.set(key, value);
+  }
   const search = params.toString();
   return search === "" ? "/collection" : `/collection?${search}`;
+}
+
+/**
+ * Splits a query into whitespace-separated terms, treating whitespace inside
+ * double quotes as ordinary text - the same rule the tokenizer's `scanTerm`
+ * uses, so `binder:"box one"` stays one term instead of being torn in half
+ * by a facet toggle that has nothing to do with it.
+ *
+ * This is deliberately not a re-implementation of the tokenizer: it only has
+ * to slice the raw text into the same units the user typed, so that
+ * appending or removing one leaves the rest byte-identical. Parens glued to
+ * a term stay glued; that just means a chip inside a parenthesized group
+ * won't be recognized as active, and toggling it appends instead.
+ */
+export function splitQueryTerms(query: string): string[] {
+  const terms: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (const char of query) {
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && (char === " " || char === "\t" || char === "\n" || char === "\r")) {
+      if (current !== "") terms.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  if (current !== "") terms.push(current);
+
+  return terms;
+}
+
+/**
+ * The `binder:` term that selects exactly `location`, or `null` when the
+ * location can't be expressed as one: the tokenizer treats `"` as a mode
+ * toggle with no escape, so a location containing a quote has no query
+ * spelling. Returning null lets the facet render such a location as plain
+ * text rather than a link that would silently filter to the wrong thing.
+ */
+export function binderFilterTerm(location: string): string | null {
+  if (location === "" || location.includes('"')) return null;
+  const needsQuotes = /[\s()]/.test(location);
+  return needsQuotes ? `binder:"${location}"` : `binder:${location}`;
+}
+
+/** Whether `term` is already one of the query's top-level terms. */
+export function isTermActive(query: string, term: string): boolean {
+  return splitQueryTerms(query).includes(term);
+}
+
+/**
+ * Adds `term` to the query, or removes it if it's already there. Facet chips
+ * compose into the one query string the search box owns (KAD-21) rather than
+ * being a second, parallel filter the user has to reconcile with what they
+ * typed.
+ */
+export function toggleQueryTerm(query: string, term: string): string {
+  const terms = splitQueryTerms(query);
+  const index = terms.indexOf(term);
+  if (index === -1) return [...terms, term].join(" ");
+  return [...terms.slice(0, index), ...terms.slice(index + 1)].join(" ");
 }
 
 // Deliberately excludes `art_crop` and `border_crop`: both cut the card's
@@ -82,6 +163,47 @@ export function errorHeading(kind: QueryErrorKind): string {
     case "syntax":
       return "Couldn't read that search";
   }
+}
+
+/** The stack-identity fields the binder field's label needs to name. */
+export interface StackIdentity {
+  readonly finish: string;
+  readonly condition: string;
+  readonly isProxy: boolean;
+  readonly binderLocation: string;
+}
+
+/**
+ * Accessible name for a stack's binder-location input.
+ *
+ * The card name alone isn't enough: the same printing can legitimately
+ * appear as several stacks on one page (different condition, finish, or
+ * location - that's what the stack unique index means), and several inputs
+ * sharing one accessible name is ambiguous both to a screen reader and to a
+ * test locator. Naming the identity columns distinguishes them.
+ */
+export function binderFieldLabel(cardName: string, stack: StackIdentity): string {
+  const parts = [stack.finish, stack.condition];
+  if (stack.isProxy) parts.push("proxy");
+  parts.push(stack.binderLocation === "" ? "unfiled" : stack.binderLocation);
+  return `Binder location for ${cardName} (${parts.join(", ")})`;
+}
+
+/**
+ * What the user sees when a binder-location edit collided with an existing
+ * stack. `binderLocation` is part of the stack unique index, so moving a
+ * stack somewhere an identical stack already sits is a real collision, and
+ * `updateCollectionItem` refuses it rather than merging (combining the two
+ * quantities is a decision the user never made). The message has to say that
+ * out loud - a silently discarded edit is the worse failure.
+ *
+ * `cardName` is null when the conflicting stack isn't in the current result
+ * set, e.g. the search that produced the page no longer matches it.
+ */
+export function binderConflictMessage(cardName: string | null, location: string): string {
+  const subject = cardName === null ? "That stack" : `Your ${cardName} stack`;
+  const target = location === "" ? "no binder location" : `"${location}"`;
+  return `${subject} wasn't moved: an identical stack already sits in ${target}. Move or merge that one first - combining two physical stacks isn't something this will do on its own.`;
 }
 
 /**

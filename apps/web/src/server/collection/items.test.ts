@@ -131,3 +131,89 @@ describe("getCollectionItem", () => {
     expect(getCollectionItem(created.id)?.id).toBe(created.id);
   });
 });
+
+/**
+ * KAD-21 moves stacks between binder locations from the browse page.
+ * `binderLocation` is part of the stack unique index, so a move is the one
+ * edit that can collide with a stack the user never mentioned - these pin
+ * down that the collision is reported and, crucially, that the row is left
+ * exactly as it was.
+ */
+describe("updateCollectionItem (binder location)", () => {
+  async function seedStack(binderLocation: string) {
+    const { createOrMergeCollectionItem } = await import("./items");
+    return createOrMergeCollectionItem({
+      scryfallId,
+      finish: "nonfoil",
+      condition: "NM",
+      quantity: 1,
+      isProxy: false,
+      binderLocation,
+      language: "en",
+    });
+  }
+
+  it("moves a stack to a new location", async () => {
+    await seedCard(scryfallId);
+    const { updateCollectionItem } = await import("./items");
+    const stack = await seedStack("");
+
+    const result = updateCollectionItem(stack.id, { binderLocation: "box1" });
+    expect(result.outcome).toBe("updated");
+    expect(result.outcome === "updated" && result.row.binderLocation).toBe("box1");
+  });
+
+  it("reports a conflict when an identical stack already sits there", async () => {
+    await seedCard(scryfallId);
+    const { updateCollectionItem } = await import("./items");
+    const source = await seedStack("box1");
+    await seedStack("box2");
+
+    expect(updateCollectionItem(source.id, { binderLocation: "box2" })).toEqual({
+      outcome: "conflict",
+    });
+  });
+
+  it("leaves the row untouched after a conflict", async () => {
+    await seedCard(scryfallId);
+    const { getCollectionItem, updateCollectionItem } = await import("./items");
+    const source = await seedStack("box1");
+    await seedStack("box2");
+
+    updateCollectionItem(source.id, { binderLocation: "box2" });
+
+    const after = getCollectionItem(source.id);
+    expect(after?.binderLocation).toBe("box1");
+    expect(after?.quantity).toBe(1);
+    // Both stacks survive: a conflict must not be a disguised merge.
+    const { listCollectionItems } = await import("./items");
+    expect(listCollectionItems()).toHaveLength(2);
+  });
+
+  // Two stacks differing only in condition are two rows by design (KAD-12),
+  // so they can share a location without colliding.
+  it("allows two stacks in one location when another identity column differs", async () => {
+    await seedCard(scryfallId);
+    const { createOrMergeCollectionItem, updateCollectionItem } = await import("./items");
+    const nearMint = await seedStack("box1");
+    const played = createOrMergeCollectionItem({
+      scryfallId,
+      finish: "nonfoil",
+      condition: "LP",
+      quantity: 1,
+      isProxy: false,
+      binderLocation: "",
+      language: "en",
+    });
+
+    expect(updateCollectionItem(played.id, { binderLocation: "box1" }).outcome).toBe("updated");
+    expect(nearMint.binderLocation).toBe("box1");
+  });
+
+  it("reports not_found for an unknown id", async () => {
+    const { updateCollectionItem } = await import("./items");
+    expect(updateCollectionItem("nope", { binderLocation: "box1" })).toEqual({
+      outcome: "not_found",
+    });
+  });
+});

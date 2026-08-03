@@ -1,15 +1,26 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import {
+  BINDER_FACET_LIMIT,
+  type BinderLocationFacet,
+  listBinderLocations,
+} from "@/server/collection/binder-locations";
 import { type CollectionSearchRow, runCollectionSearch } from "@/server/search/collection-search";
 import type { QueryErrorPresentation } from "@/server/search/query-errors";
+import { updateBinderLocationAction } from "./actions";
 import {
+  binderConflictMessage,
+  binderFieldLabel,
+  binderFilterTerm,
   cardImageUrl,
   collectionHref,
   errorHeading,
   firstParam,
+  isTermActive,
   parseViewMode,
   resultSummary,
   type SearchParamValue,
+  toggleQueryTerm,
   type ViewMode,
 } from "./collection-view";
 
@@ -18,8 +29,124 @@ const RESULT_LIMIT = 200;
 function stackSummary(item: CollectionSearchRow["item"]): string {
   const parts = [`${String(item.quantity)}x`, item.finish, item.condition];
   if (item.isProxy) parts.push("proxy");
-  if (item.binderLocation !== "") parts.push(item.binderLocation);
   return parts.join(" · ");
+}
+
+/**
+ * Inline edit for one stack's binder location (KAD-21 AC1). A plain form
+ * posting to a Server Action, so it works before hydration and needs no
+ * client component; `q`/`view` ride along as hidden fields so the action can
+ * rebuild the page URL it redirects back to without trusting a client-
+ * supplied one.
+ */
+function BinderEditor({
+  row,
+  query,
+  view,
+}: {
+  row: CollectionSearchRow;
+  query: string;
+  view: ViewMode;
+}) {
+  return (
+    <form
+      action={updateBinderLocationAction.bind(null, row.item.id)}
+      className="flex items-center gap-1"
+    >
+      <input type="hidden" name="q" value={query} />
+      <input type="hidden" name="view" value={view} />
+      <input
+        type="text"
+        name="binderLocation"
+        defaultValue={row.item.binderLocation}
+        placeholder="No location"
+        aria-label={binderFieldLabel(row.card.name, row.item)}
+        className="min-w-0 flex-1 rounded border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+      />
+      <button
+        type="submit"
+        className="rounded border border-zinc-300 px-2 py-1 text-xs font-medium dark:border-zinc-700"
+      >
+        Save
+      </button>
+    </form>
+  );
+}
+
+/**
+ * The location filter (KAD-21). Each chip toggles a `binder:` term into the
+ * same query string the search box owns, rather than being a second filter
+ * mechanism the user then has to reconcile with what they typed.
+ */
+function LocationFacet({
+  locations,
+  query,
+  view,
+}: {
+  locations: readonly BinderLocationFacet[];
+  query: string;
+  view: ViewMode;
+}) {
+  if (locations.length === 0) return null;
+
+  return (
+    <nav aria-label="Filter by binder location" className="flex flex-wrap items-center gap-2">
+      {locations.map((facet) => {
+        const term = binderFilterTerm(facet.location);
+        const label = `${facet.location} (${String(facet.cardCount)})`;
+
+        // A location containing a double quote has no query spelling at all
+        // (the tokenizer has no escape for it), so it is shown as plain text
+        // instead of a link that would filter to something else.
+        if (term === null) {
+          return (
+            <span
+              key={facet.location}
+              title="This location can't be filtered on - its name contains a quote character."
+              className="rounded-full border border-dashed border-zinc-300 px-3 py-1 text-xs text-zinc-400 dark:border-zinc-700 dark:text-zinc-600"
+            >
+              {label}
+            </span>
+          );
+        }
+
+        const active = isTermActive(query, term);
+        return (
+          <Link
+            key={facet.location}
+            href={collectionHref(toggleQueryTerm(query, term), view)}
+            aria-pressed={active}
+            className={
+              active
+                ? "rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700"
+            }
+          >
+            {label}
+          </Link>
+        );
+      })}
+      {locations.length === BINDER_FACET_LIMIT && (
+        <span className="text-xs text-zinc-500 dark:text-zinc-500">
+          first {BINDER_FACET_LIMIT} locations - type a `binder:` term for the rest
+        </span>
+      )}
+    </nav>
+  );
+}
+
+function ConflictBanner({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      // Named for the same reason as the search error banner: Next renders
+      // its own unnamed role="alert" route announcer on every page.
+      aria-label="Binder location conflict"
+      className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+    >
+      {message}
+    </div>
+  );
 }
 
 /**
@@ -55,7 +182,13 @@ function CardImage({ row, view }: { row: CollectionSearchRow; view: ViewMode }) 
   );
 }
 
-function GridCard({ row }: { row: CollectionSearchRow }) {
+interface RowProps {
+  readonly row: CollectionSearchRow;
+  readonly query: string;
+  readonly view: ViewMode;
+}
+
+function GridCard({ row, query, view }: RowProps) {
   return (
     <li className="flex flex-col gap-1">
       <CardImage row={row} view="grid" />
@@ -64,11 +197,12 @@ function GridCard({ row }: { row: CollectionSearchRow }) {
         {row.card.setName} · #{row.card.collectorNumber}
       </span>
       <span className="text-xs text-zinc-600 dark:text-zinc-400">{stackSummary(row.item)}</span>
+      <BinderEditor row={row} query={query} view={view} />
     </li>
   );
 }
 
-function ListCard({ row }: { row: CollectionSearchRow }) {
+function ListCard({ row, query, view }: RowProps) {
   return (
     <li className="flex items-start gap-3 border-b border-zinc-200 py-3 last:border-none dark:border-zinc-800">
       <CardImage row={row} view="list" />
@@ -81,6 +215,9 @@ function ListCard({ row }: { row: CollectionSearchRow }) {
         {row.card.typeLine !== "" && (
           <div className="text-sm text-zinc-500 dark:text-zinc-500">{row.card.typeLine}</div>
         )}
+        <div className="mt-1 max-w-xs">
+          <BinderEditor row={row} query={query} view={view} />
+        </div>
       </div>
     </li>
   );
@@ -162,6 +299,12 @@ export default async function CollectionPage({
   const query = firstParam(params["q"]);
   const view = parseViewMode(params["view"]);
   const outcome = runCollectionSearch(query, RESULT_LIMIT);
+  const locations = listBinderLocations();
+
+  const conflictId = firstParam(params["conflict"]);
+  const conflictRow = outcome.ok
+    ? outcome.rows.find((candidate) => candidate.item.id === conflictId)
+    : undefined;
 
   return (
     // Bottom padding clears the fixed control bar on phone widths.
@@ -175,6 +318,17 @@ export default async function CollectionPage({
 
       <Controls query={query} view={view} />
 
+      {conflictId !== "" && (
+        <ConflictBanner
+          message={binderConflictMessage(
+            conflictRow?.card.name ?? null,
+            firstParam(params["conflictTo"]),
+          )}
+        />
+      )}
+
+      <LocationFacet locations={locations} query={query} view={view} />
+
       {outcome.ok ? (
         <>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -183,13 +337,13 @@ export default async function CollectionPage({
           {view === "grid" ? (
             <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               {outcome.rows.map((row) => (
-                <GridCard key={row.item.id} row={row} />
+                <GridCard key={row.item.id} row={row} query={query} view={view} />
               ))}
             </ul>
           ) : (
             <ul>
               {outcome.rows.map((row) => (
-                <ListCard key={row.item.id} row={row} />
+                <ListCard key={row.item.id} row={row} query={query} view={view} />
               ))}
             </ul>
           )}
