@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # corepack provisions the pnpm version pinned in package.json's
+      # packageManager field - don't install pnpm separately or the two
+      # disagree.
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm lint:biome
+
+      - name: Lint (ESLint)
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Per CLAUDE.md: e2e specs that merely exist have twice let real bugs
+      # through. They have to actually run.
+      - name: E2E
+        run: pnpm test:e2e
+
+  # NFR-1 (KAD-20): p95 <= 200ms at 110k printings / 20k owned stacks.
+  # Tracked, not gated - `continue-on-error` is deliberate. Wall-clock
+  # timing on whatever runner GitHub happens to schedule is too noisy to
+  # fail a build on, and the ticket asks for a tracked metric rather than a
+  # hard gate. The measurements land in the job summary so a regression is
+  # visible without breaking the merge.
+  perf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Search benchmark (NFR-1)
+        id: bench
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          pnpm test:perf 2>&1 | tee perf-output.txt
+
+      - name: Publish benchmark to job summary
+        if: always()
+        run: |
+          {
+            echo '## Search benchmark (NFR-1)'
+            echo
+            echo '```'
+            cat perf-output.txt || echo 'benchmark produced no output'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: search-benchmark
+          path: perf-output.txt
+          if-no-files-found: warn

@@ -37,6 +37,23 @@ export default defineConfig({
           passWithNoTests: true,
         },
       },
+      {
+        resolve: {
+          tsconfigPaths: true,
+        },
+        test: {
+          // The NFR-1 search benchmark (KAD-20). Its own project, and named
+          // `.bench.ts` rather than `.test.ts`, so seeding 110k rows can't
+          // wander into the default suite: `pnpm test` names the projects it
+          // wants, and `pnpm test:perf` is the only way in here.
+          name: "perf",
+          environment: "node",
+          include: ["apps/web/src/**/*.bench.ts"],
+          // Wall-clock at 110k rows; the default 5s timeout is not close.
+          testTimeout: 600_000,
+          hookTimeout: 600_000,
+        },
+      },
     ],
   },
 });

@@ -75,7 +75,7 @@ function seed(): void {
     `INSERT INTO collection_items (
        id, scryfall_id, finish, condition, quantity, is_proxy,
        binder_location, language, created_at, updated_at
-     ) VALUES (@id, @scryfallId, 'nonfoil', 'nm', 2, 0, @binder, 'en', @now, @now)`,
+     ) VALUES (@id, @scryfallId, 'nonfoil', 'NM', 2, 0, @binder, 'en', @now, @now)`,
   );
 
   db.transaction(() => {

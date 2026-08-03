@@ -14,8 +14,9 @@
     "lint:biome": "biome check .",
     "typecheck": "pnpm -r --if-present typecheck",
     "typecheck:tsgo": "pnpm -r --if-present typecheck:tsgo",
-    "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test": "vitest run --project node --project jsdom",
+    "test:e2e": "playwright test",
+    "test:perf": "vitest run --project perf"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
