@@ -69,7 +69,15 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
-      <h1 className="text-2xl font-semibold">MTG Scanner</h1>
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-2xl font-semibold">MTG Scanner</h1>
+        <Link
+          href="/collection"
+          className="text-sm text-blue-700 hover:underline dark:text-blue-400"
+        >
+          Browse collection
+        </Link>
+      </div>
 
       {openReconciliationCount > 0 && (
         <Link
