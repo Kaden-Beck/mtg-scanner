@@ -113,6 +113,33 @@ up --build`), not just `pnpm test`.
   file plus a manually-appended journal entry, and it stays completely
   invisible to future `db:generate` runs since those only diff declared
   `schema.ts` tables against the snapshot. (`apps/web/drizzle/0003_cards_fts.sql`)
+- **Playwright specs are transpiled to CJS, where `import.meta` is a hard
+  `SyntaxError` at load time** — not a warning, and not something
+  typecheck or Vitest will tell you, since both handle it fine. A spec that
+  needs a path must use `process.cwd()` (Playwright runs from the repo
+  root, the same assumption `playwright.config.ts`'s relative `testDir`
+  already makes). (`apps/web/e2e/collection.spec.ts`)
+- **Next renders its own `role="alert"` route announcer on every page**
+  (`#__next-route-announcer__`), so `getByRole("alert")` is *always*
+  ambiguous in a Playwright spec — strict mode fails with two matches even
+  when the page has exactly one alert of its own. Give the app's alert an
+  explicit `aria-label` and select by name; this is also the better a11y
+  outcome, since an unnamed live region is worse for screen readers too.
+- **`next build` runs `migrate()` concurrently in every page-data worker.**
+  `db/client.ts` migrates at module evaluation, and Next collects page data
+  across ~12 worker *processes* (so the `globalThis` connection cache
+  doesn't help) — against an empty `data/`, several race migration 0000 and
+  the build dies with ``table `cards` already exists``. Only bites the
+  *first* build on a fresh volume, which is exactly the `docker compose up
+  --build` path. Tracked as KAD-57; workaround is to build once with an
+  already-migrated DB.
+- **SQLite's default `=` is case-sensitive (BINARY collation), but the
+  search compiler normalizes case itself** — `condition:`/`set:`/`r:`
+  upper- or lower-case the *query* value before comparing, so the stored
+  data has to match the schema's canonical casing (`CONDITIONS` is
+  `"NM" | "LP" | ...`, uppercase). A fixture that invents its own lowercase
+  literals typechecks only until it crosses `NewCollectionItemRow` — import
+  the tuple from `packages/schemas` instead of retyping it.
 
 ## Testing conventions
 
@@ -133,6 +160,16 @@ up --build`), not just `pnpm test`.
   <path>` directly (not matched by the normal `pnpm test` glob until you
   name it that way), never committed. Mocked tests prove the logic; one real
   run proves the integration and catches scale-dependent bugs mocks can't.
+- Expensive suites get their **own Vitest project plus a non-`.test.ts`
+  name**, not just a naming convention: the NFR-1 search benchmark is
+  `perf.bench.ts` in the `perf` project, and `pnpm test` names the projects
+  it wants (`--project node --project jsdom`) so a 110k-row seed cannot be
+  globbed into the normal run by accident. `pnpm test:perf` is the only way
+  in. (`apps/web/src/server/search/perf.bench.ts`)
+- A benchmark **reports, it doesn't gate** — wall-clock on whatever runner
+  CI schedules is too noisy to fail a build on. But it must still assert
+  *correctness* (every query returns rows), or a change that silently
+  breaks the thing being timed will benchmark as gloriously fast.
 
 ## Process
 
@@ -150,3 +187,13 @@ up --build`), not just `pnpm test`.
   KAD-14, KAD-15) shipped 2026-08-02 via direct commits to `main`, per the
   working agreement's default (no PR unless explicitly asked). 18/18
   committed points landed, none rolled over.
+- Sprint 3 (R2 · Brewing, all 5 stories: KAD-16 → KAD-20) shipped
+  2026-08-03 via direct commits to `main`. 17/17 committed points landed,
+  none rolled over. Built the query engine end to end: `packages/query-
+  parser` (parser → AST), `server/search/compile.ts` (AST → parameterized
+  SQL), the `/collection` browse UI, and the NFR-1 benchmark (worst p95
+  41ms against a 200ms target, so the JSON-color-column bitmask redesign
+  stays deferred).
+- **CI now exists** (`.github/workflows/ci.yml`, added in KAD-20) — the
+  repo had no `.github/` at all before that. It is committed but **has
+  never been pushed**, because of the missing `workflow` scope above.
