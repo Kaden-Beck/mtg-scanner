@@ -1,5 +1,12 @@
 import { CONDITIONS } from "@mtg/schemas";
-import { cards, collectionItems, type NewCardRow, type NewCollectionItemRow } from "../db/schema";
+import {
+  cards,
+  collectionItems,
+  collectionItemTags,
+  type NewCardRow,
+  type NewCollectionItemRow,
+  type NewCollectionItemTagRow,
+} from "../db/schema";
 
 /**
  * The drizzle instance, as a type only - `typeof import(...)` in a type
@@ -93,6 +100,11 @@ const RARITIES = ["common", "uncommon", "rare", "mythic"] as const;
 const FINISH_SETS: readonly string[][] = [["nonfoil"], ["foil"], ["nonfoil", "foil"], ["etched"]];
 const ITEM_FINISHES = ["nonfoil", "foil", "etched"] as const;
 const BINDERS = ["box1", "box2", "binder-red", "binder-blue", "trade-stack", ""] as const;
+// Stored already-normalized, which is what `addTag` would have produced.
+// The distribution matters more than the values: `cube` is deliberately the
+// densest so `tag:cube` benchmarks a selective-ish EXISTS over a real
+// working set rather than over three rows.
+const TAG_POOL = ["cube", "trade", "edh staple", "deck", "sell"] as const;
 const SET_COUNT = 250;
 
 const ORACLE_SNIPPETS = [
@@ -182,9 +194,24 @@ function buildItem(
   };
 }
 
+/**
+ * 0-3 tags per stack, weighted so roughly 40% of stacks carry `cube`.
+ * Deduped, because the (collection_item_id, tag) primary key would reject a
+ * repeat and the benchmark must never depend on catching that.
+ */
+function buildTags(itemId: string, random: () => number, now: Date): NewCollectionItemTagRow[] {
+  if (random() < 0.35) return [];
+  const chosen = new Set<string>();
+  if (random() < 0.6) chosen.add("cube");
+  const extra = Math.floor(random() * 3);
+  for (let i = 0; i < extra; i++) chosen.add(pick(random, TAG_POOL));
+  return [...chosen].map((tag) => ({ collectionItemId: itemId, tag, createdAt: now }));
+}
+
 export interface SeedCounts {
   readonly cards: number;
   readonly collectionItems: number;
+  readonly tags: number;
 }
 
 /**
@@ -221,11 +248,23 @@ export function seedPerfFixture(
   flushCards();
 
   let items: NewCollectionItemRow[] = [];
+  let tags: NewCollectionItemTagRow[] = [];
+  let tagCount = 0;
   const flushItems = () => {
     if (items.length === 0) return;
-    const rows = items;
-    db.transaction((tx) => tx.insert(collectionItems).values(rows).run());
+    const itemRows = items;
+    const tagRows = tags;
+    // Items before their tags, inside one transaction. The foreign key is
+    // enforced per statement, not at commit, so inserting a tag whose stack
+    // hasn't been written yet fails immediately - the mid-loop ordering trap
+    // from CLAUDE.md.
+    db.transaction((tx) => {
+      tx.insert(collectionItems).values(itemRows).run();
+      if (tagRows.length > 0) tx.insert(collectionItemTags).values(tagRows).run();
+    });
+    tagCount += tagRows.length;
     items = [];
+    tags = [];
   };
   // The stack uniqueness index (scryfallId + finish + condition + isProxy +
   // binderLocation + language) means random draws can collide. Ids are
@@ -249,10 +288,11 @@ export function seedPerfFixture(
     if (seen.has(key)) continue;
     seen.add(key);
     items.push(item);
+    tags.push(...buildTags(item.id, random, now));
     generated++;
     if (items.length >= ITEM_BATCH_SIZE) flushItems();
   }
   flushItems();
 
-  return { cards: cardCount, collectionItems: generated };
+  return { cards: cardCount, collectionItems: generated, tags: tagCount };
 }

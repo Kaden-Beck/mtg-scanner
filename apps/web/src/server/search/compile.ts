@@ -1,8 +1,8 @@
 import type { Comparator, OperatorNode, QueryNode } from "@mtg/query-parser";
-import { QuerySyntaxError, UnimplementedOperatorError } from "@mtg/query-parser";
-import { CONDITIONS } from "@mtg/schemas";
+import { QuerySyntaxError } from "@mtg/query-parser";
+import { CONDITIONS, normalizeTag } from "@mtg/schemas";
 import { type Column, type SQL, sql } from "drizzle-orm";
-import { cards, collectionItems } from "../db/schema";
+import { cards, collectionItems, collectionItemTags } from "../db/schema";
 
 /**
  * Compiles a parsed query AST into a drizzle `SQL` fragment suitable for a
@@ -247,6 +247,37 @@ function conditionOperator(node: OperatorNode): SQL {
   return exactOperator(collectionItems.condition, node, match);
 }
 
+/**
+ * `tag:cube` is "this stack carries that tag" - an EXISTS against
+ * `collection_item_tags` rather than a join, so a stack with three matching
+ * tags still yields one row.
+ *
+ * The value goes through the same `normalizeTag` the write path uses, which
+ * is the whole reason that function lives in `packages/schemas`: stored
+ * tags are trimmed lowercase, and SQLite's default `=` is case-sensitive,
+ * so a query normalized any other way would silently match nothing.
+ *
+ * A value that doesn't normalize to a tag at all can't match any stored row,
+ * so it compiles to a constant false rather than an error - `tag:" "` is a
+ * search with no results, not a malformed query. `-tag:cube` falls out of
+ * the generic `NOT` handling in `compileQuery` for free.
+ */
+function tagOperator(node: OperatorNode): SQL {
+  if (node.comparator !== ":" && node.comparator !== "=" && node.comparator !== "!=") {
+    throw badComparator(node, "use ':', '=', or '!='");
+  }
+
+  const tag = normalizeTag(node.value);
+  if (tag === null) return node.comparator === "!=" ? ALWAYS_TRUE : ALWAYS_FALSE;
+
+  const predicate = sql`EXISTS (
+    SELECT 1 FROM ${collectionItemTags}
+    WHERE ${collectionItemTags.collectionItemId} = ${collectionItems.id}
+      AND ${collectionItemTags.tag} = ${tag}
+  )`;
+  return node.comparator === "!=" ? sql`NOT ${predicate}` : predicate;
+}
+
 function compileOperator(node: OperatorNode): SQL {
   switch (node.operator) {
     case "color":
@@ -272,10 +303,7 @@ function compileOperator(node: OperatorNode): SQL {
     case "condition":
       return conditionOperator(node);
     case "tag":
-      throw new UnimplementedOperatorError(
-        "tag",
-        "tag: is recognized but not implemented yet — tag storage lands in Sprint 4 (KAD-22).",
-      );
+      return tagOperator(node);
   }
 }
 
@@ -291,7 +319,6 @@ function any(parts: readonly SQL[]): SQL {
  * @throws {QuerySyntaxError} a value or comparator that parses but can't
  *   mean anything against the schema (bad color letter, non-numeric `cmc`,
  *   unknown `is:` value, ordering comparator on a text field)
- * @throws {UnimplementedOperatorError} `tag:`, pending KAD-22
  */
 export function compileQuery(node: QueryNode): SQL {
   switch (node.kind) {

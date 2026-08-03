@@ -3,10 +3,10 @@ import type { QueryErrorKind } from "@/server/search/query-errors";
 import {
   binderConflictMessage,
   binderFieldLabel,
-  binderFilterTerm,
   cardImageUrl,
   collectionHref,
   errorHeading,
+  filterTerm,
   firstParam,
   isTermActive,
   parseViewMode,
@@ -99,25 +99,47 @@ describe("splitQueryTerms", () => {
   });
 });
 
-describe("binderFilterTerm", () => {
-  it("builds a bare term for a simple location", () => {
-    expect(binderFilterTerm("box1")).toBe("binder:box1");
+describe("filterTerm", () => {
+  it("builds a bare term for a simple value", () => {
+    expect(filterTerm("binder", "box1")).toBe("binder:box1");
+    expect(filterTerm("tag", "cube")).toBe("tag:cube");
   });
 
-  it("quotes a location containing whitespace or parens", () => {
-    expect(binderFilterTerm("box one")).toBe('binder:"box one"');
-    expect(binderFilterTerm("shelf (top)")).toBe('binder:"shelf (top)"');
+  it("quotes a value containing whitespace or parens", () => {
+    expect(filterTerm("binder", "box one")).toBe('binder:"box one"');
+    expect(filterTerm("binder", "shelf (top)")).toBe('binder:"shelf (top)"');
+    expect(filterTerm("tag", "edh staple")).toBe('tag:"edh staple"');
   });
 
   // The tokenizer treats `"` as a mode toggle with no escape, so there is no
-  // query text that selects such a location - saying so beats emitting a
-  // term that would filter to something else.
-  it("returns null for a location that has no query spelling", () => {
-    expect(binderFilterTerm('the "good" binder')).toBeNull();
+  // query text that selects such a value - saying so beats emitting a term
+  // that would filter to something else.
+  it("returns null for a value that has no query spelling", () => {
+    expect(filterTerm("binder", 'the "good" binder')).toBeNull();
+    expect(filterTerm("tag", 'say "what"')).toBeNull();
   });
 
-  it("returns null for the empty location", () => {
-    expect(binderFilterTerm("")).toBeNull();
+  it("returns null for an empty value", () => {
+    expect(filterTerm("binder", "")).toBeNull();
+    expect(filterTerm("tag", "")).toBeNull();
+  });
+
+  // Round-trip: whatever the facet emits, the parser has to read back as
+  // the same value - that is the whole contract between them.
+  it("produces terms the parser reads back verbatim", async () => {
+    const { parseQuery } = await import("@mtg/query-parser");
+    for (const value of ["box1", "box one", "shelf (top)", "edh staple", "pauper-edh"]) {
+      const term = filterTerm("binder", value);
+      expect(term).not.toBeNull();
+      if (term !== null) {
+        expect(parseQuery(term)).toEqual({
+          kind: "operator",
+          operator: "binder",
+          comparator: ":",
+          value,
+        });
+      }
+    }
   });
 });
 
@@ -256,7 +278,7 @@ describe("cardImageUrl", () => {
 });
 
 describe("errorHeading", () => {
-  const kinds: QueryErrorKind[] = ["unsupported-operator", "unimplemented-operator", "syntax"];
+  const kinds: QueryErrorKind[] = ["unsupported-operator", "syntax"];
 
   it.each(kinds)("returns a distinct heading for %s", (kind) => {
     expect(errorHeading(kind)).not.toBe("");

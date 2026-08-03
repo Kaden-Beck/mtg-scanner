@@ -8,12 +8,7 @@ export type {
   OrNode,
   QueryNode,
 } from "./ast";
-export {
-  QueryParseError,
-  QuerySyntaxError,
-  UnimplementedOperatorError,
-  UnsupportedOperatorError,
-} from "./errors";
+export { QueryParseError, QuerySyntaxError, UnsupportedOperatorError } from "./errors";
 export { OPERATOR_ALIASES, SUPPORTED_OPERATORS } from "./operators";
 export { parseQuery } from "./parser";
 export { type Token, tokenize } from "./tokenizer";

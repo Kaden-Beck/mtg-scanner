@@ -3,6 +3,7 @@ import {
   blob,
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -139,6 +140,43 @@ export const collectionItems = sqliteTable(
 
 export type CollectionItemRow = typeof collectionItems.$inferSelect;
 export type NewCollectionItemRow = typeof collectionItems.$inferInsert;
+
+/**
+ * Free-form tags on a stack (KAD-22). No vocabulary table on purpose: the
+ * AC is free-form creation, and a lookup table would only add a join and a
+ * reason for a tag to exist with nothing tagged.
+ *
+ * Tags are normalized to trimmed lowercase on write (see
+ * `server/collection/tags.ts`), so `Cube` and `cube` are one tag rather
+ * than two rows that look identical in the UI. The composite primary key is
+ * what makes tagging the same stack twice a no-op instead of a duplicate.
+ *
+ * `ON DELETE CASCADE` matters here: deleting a stack must not leave tag
+ * rows pointing at nothing. It only actually fires because
+ * `db/client.ts` sets `PRAGMA foreign_keys = ON` - SQLite ignores foreign
+ * keys entirely by default.
+ */
+export const collectionItemTags = sqliteTable(
+  "collection_item_tags",
+  {
+    collectionItemId: text("collection_item_id")
+      .notNull()
+      .references(() => collectionItems.id, { onDelete: "cascade" }),
+    tag: text("tag").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.collectionItemId, table.tag] }),
+    // The primary key already serves the compiler's `EXISTS (... WHERE
+    // collection_item_id = ? AND tag = ?)`; this one is for the reverse
+    // direction - listing every stack carrying a tag, which the tag facet
+    // does.
+    index("collection_item_tags_tag_idx").on(table.tag),
+  ],
+);
+
+export type CollectionItemTagRow = typeof collectionItemTags.$inferSelect;
+export type NewCollectionItemTagRow = typeof collectionItemTags.$inferInsert;
 
 export const IMPORT_SOURCES = ["archidekt"] as const;
 export type ImportSource = (typeof IMPORT_SOURCES)[number];

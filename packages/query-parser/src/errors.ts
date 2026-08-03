@@ -10,21 +10,13 @@ export class QuerySyntaxError extends QueryParseError {
   }
 }
 
-/**
- * A real v1 operator that parses fine but has no storage behind it yet.
- * Distinct from `UnsupportedOperatorError` (which means "never heard of
- * it") so the UI can say "coming soon" rather than "you typo'd". Thrown by
- * the compiler, not the parser — the grammar genuinely accepts these.
- */
-export class UnimplementedOperatorError extends QueryParseError {
-  readonly operator: string;
-
-  constructor(operator: string, message: string) {
-    super(message);
-    this.name = "UnimplementedOperatorError";
-    this.operator = operator;
-  }
-}
+// There was also an `UnimplementedOperatorError` here, for a v1 operator
+// the grammar accepted but the compiler had no storage behind. `tag:` was
+// its only thrower, and KAD-22 built that storage — so the class, its
+// error kind, and the UI branch that rendered it all came out with it
+// rather than being left as a dead type and an unreachable heading. Every
+// v1 operator now compiles; reintroducing this is a handful of lines the
+// day something is genuinely deferred again.
 
 /** Thrown the moment the tokenizer sees `word:` where `word` isn't a v1 operator key. */
 export class UnsupportedOperatorError extends QueryParseError {

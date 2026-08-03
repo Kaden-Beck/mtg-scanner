@@ -94,16 +94,19 @@ export function splitQueryTerms(query: string): string[] {
 }
 
 /**
- * The `binder:` term that selects exactly `location`, or `null` when the
- * location can't be expressed as one: the tokenizer treats `"` as a mode
- * toggle with no escape, so a location containing a quote has no query
- * spelling. Returning null lets the facet render such a location as plain
- * text rather than a link that would silently filter to the wrong thing.
+ * The `<operator>:<value>` term that selects exactly `value`, or `null` when
+ * the value can't be expressed as one: the tokenizer treats `"` as a mode
+ * toggle with no escape, so a value containing a quote has no query spelling
+ * at all. Returning null lets a facet render such a value as plain text
+ * rather than a link that would silently filter to the wrong thing.
+ *
+ * Shared by the binder-location and tag facets (KAD-21, KAD-22) - the
+ * quoting rule belongs to the query grammar, not to either facet.
  */
-export function binderFilterTerm(location: string): string | null {
-  if (location === "" || location.includes('"')) return null;
-  const needsQuotes = /[\s()]/.test(location);
-  return needsQuotes ? `binder:"${location}"` : `binder:${location}`;
+export function filterTerm(operator: string, value: string): string | null {
+  if (value === "" || value.includes('"')) return null;
+  const needsQuotes = /[\s()]/.test(value);
+  return needsQuotes ? `${operator}:"${value}"` : `${operator}:${value}`;
 }
 
 /** Whether `term` is already one of the query's top-level terms. */
@@ -158,8 +161,6 @@ export function errorHeading(kind: QueryErrorKind): string {
   switch (kind) {
     case "unsupported-operator":
       return "Unknown search operator";
-    case "unimplemented-operator":
-      return "That operator isn't wired up yet";
     case "syntax":
       return "Couldn't read that search";
   }

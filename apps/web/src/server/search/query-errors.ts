@@ -1,17 +1,18 @@
-import {
-  QueryParseError,
-  UnimplementedOperatorError,
-  UnsupportedOperatorError,
-} from "@mtg/query-parser";
+import { QueryParseError, UnsupportedOperatorError } from "@mtg/query-parser";
 
 /**
  * Why a query didn't run. The distinction matters to the user: "I've never
- * heard of that operator" and "that operator is real but isn't wired up
- * yet" call for different reactions, and collapsing them into one generic
+ * heard of that operator" and "that operator is real but you've used it
+ * wrong" call for different reactions, and collapsing them into one generic
  * "invalid search" is exactly the confidently-unhelpful failure KAD-18
  * exists to prevent.
+ *
+ * A third kind, `unimplemented-operator`, existed for operators the grammar
+ * accepted but the compiler couldn't run. `tag:` was the only one; KAD-22
+ * built it, so the kind came out rather than lingering as an unreachable
+ * branch.
  */
-export type QueryErrorKind = "unsupported-operator" | "unimplemented-operator" | "syntax";
+export type QueryErrorKind = "unsupported-operator" | "syntax";
 
 export interface QueryErrorPresentation {
   readonly kind: QueryErrorKind;
@@ -31,9 +32,6 @@ export interface QueryErrorPresentation {
 export function toQueryErrorPresentation(error: unknown): QueryErrorPresentation | null {
   if (error instanceof UnsupportedOperatorError) {
     return { kind: "unsupported-operator", message: error.message, operator: error.operator };
-  }
-  if (error instanceof UnimplementedOperatorError) {
-    return { kind: "unimplemented-operator", message: error.message, operator: error.operator };
   }
   if (error instanceof QueryParseError) {
     return { kind: "syntax", message: error.message, operator: null };

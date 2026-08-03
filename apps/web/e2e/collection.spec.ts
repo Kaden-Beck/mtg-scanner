@@ -29,6 +29,7 @@ const CARD_NAME = `E2E Goblin ${NONCE}`;
 const OTHER_CARD_NAME = `E2E Island ${NONCE}`;
 const MOVE_CARD_NAME = `E2E Bear ${NONCE}`;
 const CONFLICT_CARD_NAME = `E2E Wall ${NONCE}`;
+const TAG_CARD_NAME = `E2E Ogre ${NONCE}`;
 const BINDER = `e2e-${NONCE}`;
 // A separate prefix, because `binder:` is a *contains* match: locations
 // derived from BINDER would be swept up by the searches above.
@@ -36,6 +37,8 @@ const MOVE_FROM = `moved-${NONCE}-from`;
 const MOVE_TO = `moved-${NONCE}-to`;
 const CONFLICT_FROM = `taken-${NONCE}-from`;
 const CONFLICT_TO = `taken-${NONCE}-to`;
+const TAG_BINDER = `tagged-${NONCE}`;
+const TAG = `cube-${NONCE}`;
 
 interface SeedCard {
   readonly id: string;
@@ -87,6 +90,14 @@ function seed(): void {
       typeLine: "Creature — Wall",
       cmc: 2,
       binders: [CONFLICT_FROM, CONFLICT_TO],
+    },
+    {
+      id: randomUUID(),
+      name: TAG_CARD_NAME,
+      colors: ["B"],
+      typeLine: "Creature — Ogre",
+      cmc: 3,
+      binders: [TAG_BINDER],
     },
   ];
 
@@ -191,10 +202,11 @@ test("names the offending operator instead of a generic error (AC2/KAD-18)", asy
   await expect(alert).toContainText("Unknown search operator");
   await expect(alert).toContainText("banana");
 
-  // `tag:` is real v1 grammar the compiler defers to Sprint 4 - a distinct
-  // message from "never heard of it".
+  // `tag:` used to be the one v1 operator that parsed but had no storage,
+  // and it reported that distinctly. KAD-22 built the storage, so it must
+  // now run like any other operator rather than raise anything at all.
   await page.goto("/collection?q=tag%3Acube");
-  await expect(alert).toContainText("Sprint 4");
+  await expect(alert).toHaveCount(0);
 });
 
 test("toggles between grid and list views (AC1)", async ({ page }) => {
@@ -292,6 +304,31 @@ test("filters by location from the facet, and toggles back off (KAD-21)", async 
   // than stacking a second copy.
   await facet.getByRole("link", { name: new RegExp(`^${CONFLICT_FROM} \\(`) }).click();
   await expect(page).toHaveURL(/\/collection$/);
+});
+
+test("tags a stack, filters by the tag, and untags it (KAD-22 AC2)", async ({ page }) => {
+  await page.goto(`/collection?q=${encodeURIComponent(`binder:${TAG_BINDER}`)}`);
+  const context = `${TAG_CARD_NAME} (${TAG_BINDER})`;
+
+  // Deliberately mixed case on the way in: tags are stored normalized, so
+  // the chip and the `tag:` term that finds it are both lowercase.
+  await page.getByLabel(`Add a tag to ${context}`).fill(TAG.toUpperCase());
+  await page.getByRole("button", { name: `Add tag to ${context}` }).click();
+  await expect(
+    page.getByRole("button", { name: `Remove tag ${TAG} from ${context}` }),
+  ).toBeVisible();
+
+  // AC2: applied, therefore filterable.
+  await page.goto(`/collection?q=${encodeURIComponent(`tag:${TAG}`)}`);
+  await expect(page.getByText(TAG_CARD_NAME)).toBeVisible();
+  await expect(page.getByText(CARD_NAME)).toHaveCount(0);
+
+  // The facet offers the tag it just learned about.
+  const facet = page.getByRole("navigation", { name: "Filter by tag" });
+  await expect(facet.getByRole("link", { name: new RegExp(`^${TAG} \\(`) })).toBeVisible();
+
+  await page.getByRole("button", { name: `Remove tag ${TAG} from ${context}` }).click();
+  await expect(page.getByText(TAG_CARD_NAME)).toHaveCount(0);
 });
 
 test("keeps the primary controls in the lower third on phone width (NFR-7)", async ({ page }) => {

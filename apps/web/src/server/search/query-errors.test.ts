@@ -3,7 +3,6 @@ import {
   QueryParseError,
   QuerySyntaxError,
   SUPPORTED_OPERATORS,
-  UnimplementedOperatorError,
   UnsupportedOperatorError,
 } from "@mtg/query-parser";
 import { describe, expect, it } from "vitest";
@@ -28,15 +27,6 @@ describe("toQueryErrorPresentation", () => {
     for (const operator of SUPPORTED_OPERATORS) {
       expect(presented?.message).toContain(operator);
     }
-  });
-
-  it("distinguishes a real-but-unimplemented operator from an unknown one", () => {
-    const presented = toQueryErrorPresentation(
-      new UnimplementedOperatorError("tag", "tag: lands in Sprint 4 (KAD-22)."),
-    );
-    expect(presented?.kind).toBe("unimplemented-operator");
-    expect(presented?.operator).toBe("tag");
-    expect(presented?.message).toContain("Sprint 4");
   });
 
   it("passes a syntax error's own message through with no operator attached", () => {

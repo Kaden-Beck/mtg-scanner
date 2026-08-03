@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseQuery } from "@mtg/query-parser";
+import type { Condition, Finish } from "@mtg/schemas";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewCardRow } from "../db/schema";
 
@@ -136,23 +137,34 @@ const CARD_FIXTURES: readonly (Partial<NewCardRow> & { id: string; name: string 
   },
 ];
 
+/**
+ * Condition/finish come from the schema's own types rather than being
+ * retyped as literals: the compiler upper-cases `condition:` values and
+ * SQLite's default `=` is case-sensitive, so a hand-written variant that
+ * drifted from the canonical casing would typecheck and then match nothing.
+ */
 const STACK_FIXTURES: readonly {
   scryfallId: string;
   binderLocation: string;
-  condition: "NM" | "LP" | "MP" | "HP" | "DMG";
-  finish: "nonfoil" | "foil" | "etched";
+  condition: Condition;
+  finish: Finish;
+  /** Stored normalized (trimmed lowercase) by `addTag`, per KAD-22. */
+  tags?: readonly string[];
 }[] = [
   {
     scryfallId: "0000419b-0bba-4488-8f7a-6194544ce91e",
     binderLocation: "Box 1",
     condition: "NM",
     finish: "nonfoil",
+    // Two tags on one stack: `tag:cube OR tag:burn` must still yield one row.
+    tags: ["cube", "burn"],
   },
   {
     scryfallId: "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
     binderLocation: "Box 2",
     condition: "LP",
     finish: "foil",
+    tags: ["cube"],
   },
   {
     scryfallId: "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e",
@@ -165,6 +177,9 @@ const STACK_FIXTURES: readonly {
     binderLocation: "Commander Deck",
     condition: "MP",
     finish: "nonfoil",
+    // A tag with a space in it - only reachable from a query as
+    // `tag:"edh staple"`, which is what makes it worth having here.
+    tags: ["edh staple"],
   },
   {
     scryfallId: "4d5e6f7a-8b9c-4d0e-9f1a-3b4c5d6e7f8a",
@@ -188,7 +203,7 @@ const STACK_FIXTURES: readonly {
 
 async function seedFixtures(): Promise<void> {
   const { db } = await import("../db/client");
-  const { cards, collectionItems } = await import("../db/schema");
+  const { cards, collectionItemTags, collectionItems } = await import("../db/schema");
   const now = new Date();
 
   for (const fixture of CARD_FIXTURES) {
@@ -229,9 +244,10 @@ async function seedFixtures(): Promise<void> {
     });
   }
 
-  for (const stack of STACK_FIXTURES) {
+  for (const { tags, ...stack } of STACK_FIXTURES) {
+    const id = randomUUID();
     await db.insert(collectionItems).values({
-      id: randomUUID(),
+      id,
       quantity: 1,
       isProxy: false,
       language: "en",
@@ -239,8 +255,27 @@ async function seedFixtures(): Promise<void> {
       updatedAt: now,
       ...stack,
     });
+    for (const tag of tags ?? []) {
+      await db.insert(collectionItemTags).values({ collectionItemId: id, tag, createdAt: now });
+    }
   }
 }
+
+/**
+ * Every owned stack, in the order `searchCollection` returns them. Spelled
+ * out rather than derived, because the `it.each` tables that use it are
+ * built at module scope, before any fixture exists. `base query shape`
+ * below asserts the count still matches STACK_FIXTURES.
+ */
+const ALL_STACK_NAMES = [
+  "Grizzly Bears",
+  "Khalni Garden",
+  "Lightning Bolt",
+  "Llanowar Elves",
+  "Manamorphose",
+  "Sliver Queen",
+  "Sol Ring",
+];
 
 /** Parses, compiles, runs, and returns the matched card names (name-ordered). */
 async function search(query: string): Promise<string[]> {
@@ -380,6 +415,55 @@ describe("compileQuery — is:, cmc, and owned:", () => {
   });
 });
 
+describe("compileQuery — tag: (KAD-22)", () => {
+  const cases: readonly [query: string, expected: string[]][] = [
+    ["tag:cube", ["Lightning Bolt", "Llanowar Elves"]],
+    ["tag:burn", ["Lightning Bolt"]],
+    ["tag=cube", ["Lightning Bolt", "Llanowar Elves"]],
+    // Stored tags are trimmed lowercase and SQLite's `=` is case-sensitive,
+    // so the query value has to go through the same normalization or this
+    // silently returns nothing.
+    ["tag:CUBE", ["Lightning Bolt", "Llanowar Elves"]],
+    ['tag:"  Cube  "', ["Lightning Bolt", "Llanowar Elves"]],
+    // A tag containing a space is only reachable quoted.
+    ['tag:"edh staple"', ["Sol Ring"]],
+    ['tag:"EDH   Staple"', ["Sol Ring"]],
+    // Negation falls out of the generic NOT handling; `!=` must agree.
+    ["-tag:cube", ["Grizzly Bears", "Khalni Garden", "Manamorphose", "Sliver Queen", "Sol Ring"]],
+    ["tag!=cube", ["Grizzly Bears", "Khalni Garden", "Manamorphose", "Sliver Queen", "Sol Ring"]],
+    ["tag:nothing-has-this", []],
+    ["-tag:nothing-has-this", ALL_STACK_NAMES],
+    // Composition with a card-level predicate and with another tag.
+    ["tag:cube c:r", ["Lightning Bolt"]],
+    ["tag:cube tag:burn", ["Lightning Bolt"]],
+  ];
+
+  it.each(cases)("%s", async (query, expected) => {
+    expect(await search(query)).toEqual(expected);
+  });
+
+  // EXISTS rather than a join, so a stack matching on two tags is still one
+  // row - the bug a join would introduce and a single-tag fixture would
+  // never expose.
+  it("returns one row per stack even when several of its tags match", async () => {
+    expect(await search("tag:cube OR tag:burn")).toEqual(["Lightning Bolt", "Llanowar Elves"]);
+  });
+
+  // A value that isn't a tag can't match a stored row, so it's an empty
+  // result rather than an error - and its negation is everything.
+  it("treats a value that normalizes to nothing as matching nothing", async () => {
+    expect(await search('tag:"   "')).toEqual([]);
+    expect(await search('-tag:"   "')).toEqual(ALL_STACK_NAMES);
+  });
+
+  it("rejects an ordering comparator by name", async () => {
+    const { searchCollection } = await import("./collection-search");
+    const { QuerySyntaxError } = await import("@mtg/query-parser");
+    expect(() => searchCollection(parseQuery("tag>cube"))).toThrow(QuerySyntaxError);
+    expect(() => searchCollection(parseQuery("tag>cube"))).toThrow('doesn\'t support the ">"');
+  });
+});
+
 describe("compileQuery — boolean composition", () => {
   const cases: readonly [query: string, expected: string[]][] = [
     ["c:g t:creature", ["Grizzly Bears", "Llanowar Elves", "Sliver Queen"]],
@@ -464,13 +548,6 @@ describe("compileQuery — explicit errors (KAD-18)", () => {
     expect(() => searchCollection(parseQuery(query))).toThrow(QuerySyntaxError);
     expect(() => searchCollection(parseQuery(query))).toThrow(messagePart);
   });
-
-  it("tells the user tag: is coming rather than failing vaguely", async () => {
-    const { searchCollection } = await import("./collection-search");
-    const { UnimplementedOperatorError } = await import("@mtg/query-parser");
-    expect(() => searchCollection(parseQuery("tag:combo"))).toThrow(UnimplementedOperatorError);
-    expect(() => searchCollection(parseQuery("tag:combo"))).toThrow("Sprint 4 (KAD-22)");
-  });
 });
 
 /**
@@ -502,7 +579,6 @@ describe("runCollectionSearch", () => {
 
   const errorCases: readonly [label: string, query: string, kind: string, messagePart: string][] = [
     ["an unsupported operator", "power:3", "unsupported-operator", '"power:"'],
-    ["tag:, which is real but unbuilt", "tag:combo", "unimplemented-operator", "Sprint 4"],
     ["a syntax error", "(c:r", "syntax", "Unclosed '('"],
     ["a dangling boolean", "c:r AND", "syntax", "after 'AND'"],
     // Compile-time failures reach the UI the same way parse-time ones do.

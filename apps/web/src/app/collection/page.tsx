@@ -1,20 +1,18 @@
+import { MAX_TAG_LENGTH } from "@mtg/schemas";
 import Link from "next/link";
 import { connection } from "next/server";
-import {
-  BINDER_FACET_LIMIT,
-  type BinderLocationFacet,
-  listBinderLocations,
-} from "@/server/collection/binder-locations";
+import { BINDER_FACET_LIMIT, listBinderLocations } from "@/server/collection/binder-locations";
+import { listTags, listTagsForItems, TAG_FACET_LIMIT } from "@/server/collection/tags";
 import { type CollectionSearchRow, runCollectionSearch } from "@/server/search/collection-search";
 import type { QueryErrorPresentation } from "@/server/search/query-errors";
-import { updateBinderLocationAction } from "./actions";
+import { addTagAction, removeTagAction, updateBinderLocationAction } from "./actions";
 import {
   binderConflictMessage,
   binderFieldLabel,
-  binderFilterTerm,
   cardImageUrl,
   collectionHref,
   errorHeading,
+  filterTerm,
   firstParam,
   isTermActive,
   parseViewMode,
@@ -74,47 +72,59 @@ function BinderEditor({
 }
 
 /**
- * The location filter (KAD-21). Each chip toggles a `binder:` term into the
- * same query string the search box owns, rather than being a second filter
- * mechanism the user then has to reconcile with what they typed.
+ * One facet chip. `term` is null when the value has no query spelling at
+ * all (it contains a `"`, which the tokenizer has no escape for), in which
+ * case the chip renders as plain text rather than as a link that would
+ * filter to something else.
  */
-function LocationFacet({
-  locations,
+interface FacetChip {
+  readonly key: string;
+  readonly label: string;
+  readonly term: string | null;
+}
+
+/**
+ * A row of filter chips (KAD-21 binder locations, KAD-22 tags). Each chip
+ * toggles its term into the same query string the search box owns, rather
+ * than being a second filter mechanism the user then has to reconcile with
+ * what they typed - which is also why a chip is a link to a `?q=` URL and
+ * not a checkbox with its own state.
+ */
+function FacetBar({
+  navLabel,
+  chips,
+  truncatedNote,
   query,
   view,
 }: {
-  locations: readonly BinderLocationFacet[];
+  navLabel: string;
+  chips: readonly FacetChip[];
+  truncatedNote: string | null;
   query: string;
   view: ViewMode;
 }) {
-  if (locations.length === 0) return null;
+  if (chips.length === 0) return null;
 
   return (
-    <nav aria-label="Filter by binder location" className="flex flex-wrap items-center gap-2">
-      {locations.map((facet) => {
-        const term = binderFilterTerm(facet.location);
-        const label = `${facet.location} (${String(facet.cardCount)})`;
-
-        // A location containing a double quote has no query spelling at all
-        // (the tokenizer has no escape for it), so it is shown as plain text
-        // instead of a link that would filter to something else.
-        if (term === null) {
+    <nav aria-label={navLabel} className="flex flex-wrap items-center gap-2">
+      {chips.map((chip) => {
+        if (chip.term === null) {
           return (
             <span
-              key={facet.location}
-              title="This location can't be filtered on - its name contains a quote character."
+              key={chip.key}
+              title="This can't be filtered on - its name contains a quote character."
               className="rounded-full border border-dashed border-zinc-300 px-3 py-1 text-xs text-zinc-400 dark:border-zinc-700 dark:text-zinc-600"
             >
-              {label}
+              {chip.label}
             </span>
           );
         }
 
-        const active = isTermActive(query, term);
+        const active = isTermActive(query, chip.term);
         return (
           <Link
-            key={facet.location}
-            href={collectionHref(toggleQueryTerm(query, term), view)}
+            key={chip.key}
+            href={collectionHref(toggleQueryTerm(query, chip.term), view)}
             aria-pressed={active}
             className={
               active
@@ -122,16 +132,79 @@ function LocationFacet({
                 : "rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700"
             }
           >
-            {label}
+            {chip.label}
           </Link>
         );
       })}
-      {locations.length === BINDER_FACET_LIMIT && (
-        <span className="text-xs text-zinc-500 dark:text-zinc-500">
-          first {BINDER_FACET_LIMIT} locations - type a `binder:` term for the rest
-        </span>
+      {truncatedNote !== null && (
+        <span className="text-xs text-zinc-500 dark:text-zinc-500">{truncatedNote}</span>
       )}
     </nav>
+  );
+}
+
+/**
+ * Add/remove tags on one stack (KAD-22). Each chip is its own single-button
+ * form, and the add box is another - siblings, not nested, since a form
+ * inside a form is invalid HTML.
+ *
+ * `required` and `maxLength` here are what make the server's "invalid tag"
+ * outcome unreachable through the UI, which is why `addTagAction` treats it
+ * as a silent no-op rather than raising a notice.
+ */
+function TagEditor({
+  row,
+  tags,
+  query,
+  view,
+}: {
+  row: CollectionSearchRow;
+  tags: readonly string[];
+  query: string;
+  view: ViewMode;
+}) {
+  const context = `${row.card.name} (${row.item.binderLocation === "" ? "unfiled" : row.item.binderLocation})`;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {tags.map((tag) => (
+        <form key={tag} action={removeTagAction.bind(null, row.item.id)}>
+          <input type="hidden" name="q" value={query} />
+          <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="tag" value={tag} />
+          <button
+            type="submit"
+            aria-label={`Remove tag ${tag} from ${context}`}
+            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 hover:line-through dark:bg-zinc-800 dark:text-zinc-300"
+          >
+            {tag} ×
+          </button>
+        </form>
+      ))}
+      <form action={addTagAction.bind(null, row.item.id)} className="flex items-center gap-1">
+        <input type="hidden" name="q" value={query} />
+        <input type="hidden" name="view" value={view} />
+        <input
+          type="text"
+          name="tag"
+          required
+          maxLength={MAX_TAG_LENGTH}
+          placeholder="+ tag"
+          aria-label={`Add a tag to ${context}`}
+          className="w-20 min-w-0 rounded border border-zinc-300 bg-white px-2 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+        />
+        {/* A single-input form submits on Enter, but that isn't reachable
+            from a phone keyboard's Done key on every browser, and it isn't
+            discoverable either. */}
+        <button
+          type="submit"
+          aria-label={`Add tag to ${context}`}
+          className="rounded border border-zinc-300 px-2 py-0.5 text-xs font-medium dark:border-zinc-700"
+        >
+          Add
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -184,11 +257,12 @@ function CardImage({ row, view }: { row: CollectionSearchRow; view: ViewMode }) 
 
 interface RowProps {
   readonly row: CollectionSearchRow;
+  readonly tags: readonly string[];
   readonly query: string;
   readonly view: ViewMode;
 }
 
-function GridCard({ row, query, view }: RowProps) {
+function GridCard({ row, tags, query, view }: RowProps) {
   return (
     <li className="flex flex-col gap-1">
       <CardImage row={row} view="grid" />
@@ -198,11 +272,12 @@ function GridCard({ row, query, view }: RowProps) {
       </span>
       <span className="text-xs text-zinc-600 dark:text-zinc-400">{stackSummary(row.item)}</span>
       <BinderEditor row={row} query={query} view={view} />
+      <TagEditor row={row} tags={tags} query={query} view={view} />
     </li>
   );
 }
 
-function ListCard({ row, query, view }: RowProps) {
+function ListCard({ row, tags, query, view }: RowProps) {
   return (
     <li className="flex items-start gap-3 border-b border-zinc-200 py-3 last:border-none dark:border-zinc-800">
       <CardImage row={row} view="list" />
@@ -215,8 +290,9 @@ function ListCard({ row, query, view }: RowProps) {
         {row.card.typeLine !== "" && (
           <div className="text-sm text-zinc-500 dark:text-zinc-500">{row.card.typeLine}</div>
         )}
-        <div className="mt-1 max-w-xs">
+        <div className="mt-1 flex max-w-xl flex-wrap items-center gap-x-4 gap-y-1">
           <BinderEditor row={row} query={query} view={view} />
+          <TagEditor row={row} tags={tags} query={query} view={view} />
         </div>
       </div>
     </li>
@@ -300,6 +376,12 @@ export default async function CollectionPage({
   const view = parseViewMode(params["view"]);
   const outcome = runCollectionSearch(query, RESULT_LIMIT);
   const locations = listBinderLocations();
+  const tagFacets = listTags();
+  // One query for the whole page rather than one per stack: the browse page
+  // renders up to 200 of them.
+  const tagsByItem = outcome.ok
+    ? listTagsForItems(outcome.rows.map((row) => row.item.id))
+    : new Map<string, string[]>();
 
   const conflictId = firstParam(params["conflict"]);
   const conflictRow = outcome.ok
@@ -327,7 +409,37 @@ export default async function CollectionPage({
         />
       )}
 
-      <LocationFacet locations={locations} query={query} view={view} />
+      <FacetBar
+        navLabel="Filter by binder location"
+        chips={locations.map((facet) => ({
+          key: facet.location,
+          label: `${facet.location} (${String(facet.cardCount)})`,
+          term: filterTerm("binder", facet.location),
+        }))}
+        truncatedNote={
+          locations.length === BINDER_FACET_LIMIT
+            ? `first ${String(BINDER_FACET_LIMIT)} locations - type a binder: term for the rest`
+            : null
+        }
+        query={query}
+        view={view}
+      />
+
+      <FacetBar
+        navLabel="Filter by tag"
+        chips={tagFacets.map((facet) => ({
+          key: facet.tag,
+          label: `${facet.tag} (${String(facet.stackCount)})`,
+          term: filterTerm("tag", facet.tag),
+        }))}
+        truncatedNote={
+          tagFacets.length === TAG_FACET_LIMIT
+            ? `first ${String(TAG_FACET_LIMIT)} tags - type a tag: term for the rest`
+            : null
+        }
+        query={query}
+        view={view}
+      />
 
       {outcome.ok ? (
         <>
@@ -337,13 +449,25 @@ export default async function CollectionPage({
           {view === "grid" ? (
             <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               {outcome.rows.map((row) => (
-                <GridCard key={row.item.id} row={row} query={query} view={view} />
+                <GridCard
+                  key={row.item.id}
+                  row={row}
+                  tags={tagsByItem.get(row.item.id) ?? []}
+                  query={query}
+                  view={view}
+                />
               ))}
             </ul>
           ) : (
             <ul>
               {outcome.rows.map((row) => (
-                <ListCard key={row.item.id} row={row} query={query} view={view} />
+                <ListCard
+                  key={row.item.id}
+                  row={row}
+                  tags={tagsByItem.get(row.item.id) ?? []}
+                  query={query}
+                  view={view}
+                />
               ))}
             </ul>
           )}

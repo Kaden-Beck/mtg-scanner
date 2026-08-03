@@ -35,3 +35,4 @@ export {
   type ScryfallCard,
   scryfallCardSchema,
 } from "./scryfall-card";
+export { MAX_TAG_LENGTH, normalizeTag } from "./tags";

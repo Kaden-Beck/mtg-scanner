@@ -43,7 +43,8 @@ beforeAll(async () => {
   const seedMs = performance.now() - seedStart;
   console.log(
     `seeded ${counts.cards.toLocaleString()} cards / ` +
-      `${counts.collectionItems.toLocaleString()} collection items in ${(seedMs / 1000).toFixed(1)}s`,
+      `${counts.collectionItems.toLocaleString()} collection items / ` +
+      `${counts.tags.toLocaleString()} tags in ${(seedMs / 1000).toFixed(1)}s`,
   );
 
   ({ runCollectionSearch } = await import("./collection-search"));
@@ -73,6 +74,10 @@ const QUERIES: readonly { readonly label: string; readonly query: string }[] = [
   { label: "is: json_each", query: "is:foil" },
   { label: "binder LIKE (joined)", query: "binder:box1" },
   { label: "condition (joined)", query: "condition:nm" },
+  { label: "tag EXISTS (joined)", query: "tag:cube" },
+  { label: "tag quoted value", query: 'tag:"edh staple"' },
+  { label: "tag negated", query: "-tag:cube" },
+  { label: "tag + card predicate", query: "tag:cube c:r t:creature" },
   { label: "multi-operator AND", query: "c:r t:creature cmc<=3 r:common" },
   { label: "OR", query: "c:r OR c:u" },
   { label: "negation", query: "t:creature -is:reserved" },

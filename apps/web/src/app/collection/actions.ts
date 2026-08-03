@@ -4,6 +4,7 @@ import { updateCollectionItemRequestSchema } from "@mtg/schemas";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { updateCollectionItem } from "@/server/collection/items";
+import { addTag, removeTag } from "@/server/collection/tags";
 import { collectionHref, parseViewMode } from "./collection-view";
 
 /**
@@ -61,4 +62,36 @@ export async function updateBinderLocationAction(
         : {},
     ),
   );
+}
+
+/**
+ * Tags one stack (KAD-22).
+ *
+ * Unlike a binder move, none of `addTag`'s non-success outcomes need a
+ * notice. `already_present` leaves the chip the user was looking at exactly
+ * where it was; `invalid` (blank or over-length) can't be reached through
+ * the UI, which marks the field `required` with a `maxLength`; `not_found`
+ * means the stack was deleted between render and submit, which the
+ * re-rendered list shows more plainly than a banner would. In every case
+ * the page that comes back is an accurate picture of the tags that exist.
+ */
+// eslint-disable-next-line @typescript-eslint/require-await
+export async function addTagAction(itemId: string, formData: FormData): Promise<void> {
+  addTag(itemId, formString(formData, "tag"));
+  revalidatePath("/collection");
+  redirect(collectionHref(formString(formData, "q"), parseViewMode(formString(formData, "view"))));
+}
+
+/**
+ * Untags one stack. The tag rides in the form rather than being bound at
+ * render time for the same reason the item id is bound: both are references
+ * the client is entitled to name, and `removeTag` re-normalizes before it
+ * deletes, so a stale spelling either matches the stored row or removes
+ * nothing.
+ */
+// eslint-disable-next-line @typescript-eslint/require-await
+export async function removeTagAction(itemId: string, formData: FormData): Promise<void> {
+  removeTag(itemId, formString(formData, "tag"));
+  revalidatePath("/collection");
+  redirect(collectionHref(formString(formData, "q"), parseViewMode(formString(formData, "view"))));
 }
