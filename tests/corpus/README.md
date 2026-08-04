@@ -9,6 +9,11 @@ It is being built **before any recognition code exists**, on purpose. If the
 corpus came second it would be shaped, unconsciously, around what the first
 implementation already happened to do well.
 
+> **Shooting it?** Use `inital-scan-plan.md` at the repo root — that is the
+> step-by-step working checklist, written to be read while holding a phone.
+> This file is the reference: the manifest contract, the validation rules,
+> and why each stratum is there.
+
 ## What is in this directory
 
 | Path | In git? | What it is |
