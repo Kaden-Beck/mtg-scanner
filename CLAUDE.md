@@ -156,6 +156,18 @@ up --build`), not just `pnpm test`.
   invalidate it.** Raising `apps/web` to ES2022 kept reporting the old
   ES2017 BigInt errors until the tsbuildinfo was deleted. If a tsconfig
   change appears to have no effect, delete the cache before believing it.
+- **A Playwright `getByRole("button", { name: <card name> })` matches the
+  `Remove <card name>` button too.** The deck editor's search suggestions and
+  its deck list both carry the card's name, so an unscoped by-name selector
+  matched two buttons and the spec "selected" a card by *deleting* it, then
+  failed further down looking for a selection that never happened. Give any
+  list the user picks from an explicit `aria-label` and scope the locator to
+  it. Same family as the "Sync now" ambiguity below - assume any name that
+  appears in your data appears in more than one control.
+- **A direct `INSERT INTO cards` does not reach `cards_fts`.** The FTS table
+  is populated by the ingest (KAD-10), so an e2e fixture seeded straight
+  into SQLite is invisible to anything that searches - the deck typeahead
+  found nothing until the seed inserted into `cards_fts` explicitly.
 - **`packages/phash` must be the only implementation of resize/grayscale/
   DCT/binarization.** `sharp` (KAD-24) is used for *decode only*, in
   `server/ingest/decode-image.ts`. If the index were built with libvips'
@@ -244,6 +256,26 @@ up --build`), not just `pnpm test`.
   location display) moved to KAD-32 in Sprint 6 because no decks exist yet,
   and KAD-22's AC1 was already satisfied by KAD-12's stack-uniqueness
   design rather than reworked.
+- Sprint 5 (R2 · Brewing, all 5 stories: KAD-26 → KAD-31, excluding the
+  KAD-29 duplicate) shipped 2026-08-04 via direct commits to `main`. 17/17
+  committed points landed, none rolled over. Built deckbuilding end to end:
+  the deck schema and CRUD API, commander color-identity derivation, the
+  Commander legality engine, the violation report, and the deck editor UI.
+  One deliberate descope, recorded on its ticket: KAD-28 handles Partner /
+  Partner with / Friends forever but **not** Backgrounds or Doctor's
+  companion, since neither is a keyword lookup on both cards. A test
+  documents that gap so it fails loudly when someone closes it.
+- **`deck_allocations` exists but is a stub with no behavior.** Q2
+  (allocation as reservation vs advisory) is resolved by ADR-004 / KAD-34 in
+  Sprint 6, and the two answers want different tables, so KAD-26 shipped
+  only the shape both share. Do not read the table's existence as Q2 having
+  been answered.
+- **The dev database now holds a real corpus** - the KAD-8 ingest was run
+  during Sprint 5 and `cards` has ~104.7k rows (it had been sitting at 70,
+  which made the deck editor undemoable). The ingest takes ~2 minutes.
+  Note it can't be run via `node --experimental-strip-types` because
+  `bulk-cards.ts` has extensionless relative imports; a throwaway
+  `.test.ts` run through `vitest run <path>` is the working route.
 - **The hash index has NOT been fully populated.** KAD-24's job is done and
   verified on a 40-artwork live slice, but the full ~47.4k run (roughly an
   hour) has not been triggered. Sprint 7's scanner needs it; it is safe to
