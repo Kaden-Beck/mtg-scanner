@@ -132,7 +132,11 @@ up --build`), not just `pnpm test`.
   the build dies with ``table `cards` already exists``. Only bites the
   *first* build on a fresh volume, which is exactly the `docker compose up
   --build` path. Tracked as KAD-57; workaround is to build once with an
-  already-migrated DB.
+  already-migrated DB. **Broader than originally recorded (found in
+  KAD-24):** it is not only a fresh volume — the first `next build` after
+  *any* new migration hits it, because the workers race to apply that
+  migration. The second build succeeds. So expect one failed build every
+  time you add a migration, and don't go hunting for a new bug.
 - **SQLite's default `=` is case-sensitive (BINARY collation), but the
   search compiler normalizes case itself** — `condition:`/`set:`/`r:`
   upper- or lower-case the *query* value before comparing, so the stored
@@ -140,6 +144,24 @@ up --build`), not just `pnpm test`.
   `"NM" | "LP" | ...`, uppercase). A fixture that invents its own lowercase
   literals typechecks only until it crosses `NewCollectionItemRow` — import
   the tuple from `packages/schemas` instead of retyping it.
+- **`Math.cos` is not guaranteed bit-identical across JavaScript engines**,
+  which makes a bare float `>` unsafe in anything that must agree between
+  Node and a browser. `packages/phash` binarizes DCT coefficients against
+  their median, and two coefficients equal in exact arithmetic could land on
+  opposite sides of it in two engines — so coefficients are quantized to a
+  relative grid first, and a featureless image (all ties) answers 0 rather
+  than noise. Real artwork is never near a tie, so no meaningful hash
+  changed; the bug is invisible until the index and the scanner disagree.
+- **`tsc --noEmit` caches in `*.tsbuildinfo`, and a `target` change does not
+  invalidate it.** Raising `apps/web` to ES2022 kept reporting the old
+  ES2017 BigInt errors until the tsbuildinfo was deleted. If a tsconfig
+  change appears to have no effect, delete the cache before believing it.
+- **`packages/phash` must be the only implementation of resize/grayscale/
+  DCT/binarization.** `sharp` (KAD-24) is used for *decode only*, in
+  `server/ingest/decode-image.ts`. If the index were built with libvips'
+  resampler and a browser scanner used the package's, the two would produce
+  different hashes and matching would fail — invisibly, and not until a
+  corpus run had already hashed tens of thousands of images wrong.
 
 ## Testing conventions
 
@@ -170,6 +192,20 @@ up --build`), not just `pnpm test`.
   CI schedules is too noisy to fail a build on. But it must still assert
   *correctness* (every query returns rows), or a change that silently
   breaks the thing being timed will benchmark as gloriously fast.
+- **Playwright's `test.beforeAll` runs once per *worker*, not once per run.**
+  Under `fullyParallel: true` a spec file that seeds fixtures seeds them ~8
+  times, each with its own nonce. That is why the e2e suite now runs
+  `fullyParallel: false` (files still parallel; tests within a file
+  serialize) and against **its own database**, `apps/web/data/e2e.db`, wired
+  through `apps/web/e2e/db-path.ts` and the config's `webServer.env`. Both
+  were needed: seeding into the working dev DB accumulated ~70 binder
+  locations against `BINDER_FACET_LIMIT`'s 50, so an alphabetically
+  truncated facet dropped the chip a test clicked, on the *second* run
+  within an hour. Caveat: `reuseExistingServer` means a `next dev` already
+  on :3000 keeps its own database and the env is not applied.
+- **Vitest 4 removed the `test(name, fn, { timeout })` three-arg form.** It
+  throws at collection time with an explicit deprecation error; options go
+  in the second argument now.
 
 ## Process
 
@@ -194,6 +230,19 @@ up --build`), not just `pnpm test`.
   SQL), the `/collection` browse UI, and the NFR-1 benchmark (worst p95
   41ms against a 200ms target, so the JSON-color-column bitmask redesign
   stays deferred).
+- Sprint 4 (R2 · Brewing, all 5 stories: KAD-21 → KAD-25) shipped
+  2026-08-03/04 via direct commits to `main`. 17/17 committed points landed,
+  none rolled over. Finished collection management (binder locations, tags,
+  lossless export/import) and built the recognition pipeline's long pole:
+  `packages/phash` plus the artwork hash index job. Two descopes were
+  deliberate and recorded on their tickets — KAD-21's AC2 (deck-list
+  location display) moved to KAD-32 in Sprint 6 because no decks exist yet,
+  and KAD-22's AC1 was already satisfied by KAD-12's stack-uniqueness
+  design rather than reworked.
+- **The hash index has NOT been fully populated.** KAD-24's job is done and
+  verified on a 40-artwork live slice, but the full ~47.4k run (roughly an
+  hour) has not been triggered. Sprint 7's scanner needs it; it is safe to
+  interrupt and resumes where it stopped, so it can be run whenever.
 - **CI now exists** (`.github/workflows/ci.yml`, added in KAD-20) — the
   repo had no `.github/` at all before that. It is committed but **has
   never been pushed**, because of the missing `workflow` scope above.
