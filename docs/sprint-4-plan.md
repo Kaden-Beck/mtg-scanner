@@ -5,7 +5,7 @@ into an ADR or CLAUDE.md first, the way Sprint 3's snapshot was retired).
 
 ## Progress
 
-3 of 5 stories done (9 of 17 points). Remaining: KAD-25, then KAD-24.
+4 of 5 stories done (12 of 17 points). Remaining: **KAD-24** only.
 
 - **KAD-21** done — `c256ae5`. AC2 descoped to KAD-32 (Sprint 6) as
   recommended below; there are no decks to display locations against yet.
@@ -17,9 +17,24 @@ into an ADR or CLAUDE.md first, the way Sprint 3's snapshot was retired).
   suite. Moxfield confirmed lossy by design (open question 3), so the
   round-trip gate covers JSON and CSV.
 
-Test baseline is now **33 files / 421 tests** (was 27/292 at sprint start),
+- **KAD-25** done — `510374e`. Two binarization findings are written up on
+  the ticket; the second (float comparison was not safe across JS engines,
+  so coefficients are quantized before comparison) is a genuine correction
+  to the design sketched below, not just an implementation detail.
+
+Also `c4fa47b`, not a story: the e2e suite seeded into the working dev
+database once per *worker*, and a second run within an hour pushed the
+binder facet past `BINDER_FACET_LIMIT` so a KAD-21 chip fell off the list.
+It now has its own database and seeds once per file.
+
+Test baseline is now **35 files / 471 tests** (was 27/292 at sprint start),
 plus 16 Playwright tests. `.github/workflows/ci.yml` is still unpushed,
 blocked on the missing `gh` `workflow` scope.
+
+**Open questions still to settle for KAD-24:** `sharp` vs `jpeg-js` (#4,
+decide after checking what a second native dependency costs the Dockerfile)
+and whether to let the full ~47.4k-artwork run go after verifying on a
+slice. KAD-57 (#5) remains unscheduled.
 
 ---
 
