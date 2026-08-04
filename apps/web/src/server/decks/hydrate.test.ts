@@ -151,6 +151,66 @@ describe("loadDeckCommanders", () => {
   });
 });
 
+describe("validateDeckById", () => {
+  it("reflects a banlist change from a later sync with no user action (KAD-30 AC3)", async () => {
+    // The AC3 proof. Nothing about the deck changes - only the `cards` row
+    // the bulk ingest owns - and the verdict has to follow. This is what
+    // denormalizing `legalities` onto `deck_cards` would quietly break.
+    await seed();
+    const { addOrMergeDeckCard, createDeck } = await import("./decks");
+    const { validateDeckById } = await import("./hydrate");
+    const { createDeckCardRequestSchema, createDeckRequestSchema } = await import("@mtg/schemas");
+    const { db } = await import("../db/client");
+    const { cards } = await import("../db/schema");
+    const { eq } = await import("drizzle-orm");
+
+    db.update(cards).set({ legalities: { commander: "legal" } }).run();
+
+    const deck = createDeck(
+      createDeckRequestSchema.parse({ name: "Banlist", commanderCardId: soloId }),
+    );
+    addOrMergeDeckCard(
+      deck.id,
+      createDeckCardRequestSchema.parse({ scryfallId: tanaId, quantity: 1 }),
+    );
+
+    expect(validateDeckById(deck.id)?.violations.some((v) => v.rule === "banlist")).toBe(false);
+
+    // A sync lands, and Tana is now banned.
+    db.update(cards).set({ legalities: { commander: "banned" } }).where(eq(cards.id, tanaId)).run();
+
+    const after = validateDeckById(deck.id);
+    const banlist = after?.violations.filter((v) => v.rule === "banlist") ?? [];
+    expect(banlist).toHaveLength(1);
+    expect(banlist[0]?.cardName).toBe("Tana the Bloodsower");
+  });
+
+  it("returns undefined for an unknown deck", async () => {
+    await seed();
+    const { validateDeckById } = await import("./hydrate");
+    expect(validateDeckById("00000000-0000-4000-8000-000000000000")).toBeUndefined();
+  });
+
+  it("excludes side and maybe boards from validation", async () => {
+    await seed();
+    const { addOrMergeDeckCard, createDeck } = await import("./decks");
+    const { loadDeckForValidation } = await import("./hydrate");
+    const { createDeckCardRequestSchema, createDeckRequestSchema } = await import("@mtg/schemas");
+
+    const deck = createDeck(
+      createDeckRequestSchema.parse({ name: "Boards", commanderCardId: soloId }),
+    );
+    addOrMergeDeckCard(
+      deck.id,
+      createDeckCardRequestSchema.parse({ scryfallId: tanaId, board: "maybe", quantity: 4 }),
+    );
+
+    const hydrated = loadDeckForValidation(deck);
+    expect(hydrated.entries).toHaveLength(1);
+    expect(hydrated.entries[0]?.board).toBe("maybe");
+  });
+});
+
 describe("hydrateDeckById", () => {
   it("returns undefined for an unknown deck", async () => {
     await seed();

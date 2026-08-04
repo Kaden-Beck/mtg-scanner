@@ -1,7 +1,8 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "../db/client";
-import { type CardRow, cards, type DeckRow, decks } from "../db/schema";
+import { type CardRow, cards, deckCards, type DeckRow, decks } from "../db/schema";
 import { type Color, deriveColorIdentity } from "./color-identity";
+import { type DeckForValidation, type LegalityResult, validateDeck } from "./legality";
 
 /**
  * The DB-touching half of deck derivation, kept separate from
@@ -52,4 +53,38 @@ export function hydrateDeck(deck: DeckRow): HydratedDeck {
 export function hydrateDeckById(id: string): HydratedDeck | undefined {
   const deck = db.select().from(decks).where(eq(decks.id, id)).get();
   return deck ? hydrateDeck(deck) : undefined;
+}
+
+/**
+ * Assembles the whole deck for the legality engine (KAD-30) in one join.
+ *
+ * The join is what makes AC3 work: `legalities` is read off the live `cards`
+ * row at validate time, so a banlist change arriving in a bulk sync is
+ * reflected with no user action. Nothing is denormalized onto `deck_cards`.
+ */
+export function loadDeckForValidation(deck: DeckRow): DeckForValidation {
+  const { commander, partner } = loadDeckCommanders(deck);
+
+  const rows = db
+    .select({ entry: deckCards, card: cards })
+    .from(deckCards)
+    .innerJoin(cards, eq(deckCards.scryfallId, cards.id))
+    .where(eq(deckCards.deckId, deck.id))
+    .all();
+
+  return {
+    format: deck.format,
+    commander,
+    partner,
+    entries: rows.map((row) => ({
+      card: row.card,
+      quantity: row.entry.quantity,
+      board: row.entry.board,
+    })),
+  };
+}
+
+export function validateDeckById(id: string): LegalityResult | undefined {
+  const deck = db.select().from(decks).where(eq(decks.id, id)).get();
+  return deck ? validateDeck(loadDeckForValidation(deck)) : undefined;
 }
