@@ -5,8 +5,20 @@ into an ADR or CLAUDE.md first, the way Sprint 3's snapshot was retired).
 
 ## Progress
 
-Not started. Sprint 3 (KAD-16 → KAD-20) shipped 2026-08-03; `main` is clean
-at that point, with 7 commits not yet pushed and `.github/workflows/ci.yml`
+3 of 5 stories done (9 of 17 points). Remaining: KAD-25, then KAD-24.
+
+- **KAD-21** done — `c256ae5`. AC2 descoped to KAD-32 (Sprint 6) as
+  recommended below; there are no decks to display locations against yet.
+- **KAD-22** done — `03c586d`. AC1 was already satisfied by KAD-12 and was
+  closed as such rather than reworked; the story was tags only.
+- **KAD-23** done — `abe7ad2`. Also added `POST /api/import/collection`,
+  which was not in this plan: without it the JSON export is a file the app
+  can write and never read, and AC2 would be observable only from the test
+  suite. Moxfield confirmed lossy by design (open question 3), so the
+  round-trip gate covers JSON and CSV.
+
+Test baseline is now **33 files / 421 tests** (was 27/292 at sprint start),
+plus 16 Playwright tests. `.github/workflows/ci.yml` is still unpushed,
 blocked on the missing `gh` `workflow` scope.
 
 ---
