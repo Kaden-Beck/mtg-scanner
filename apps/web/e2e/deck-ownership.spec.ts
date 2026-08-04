@@ -23,6 +23,15 @@ const PARTIAL = `E2E Partial ${NONCE}`;
 const UNOWNED = `E2E Unowned ${NONCE}`;
 const REPRINT = `E2E Reprint ${NONCE}`;
 const DECK_NAME = `E2E Own Deck ${NONCE}`;
+/**
+ * Owned, and claimed by a deck that is not under test.
+ *
+ * Has its own card and its own stack purely so the owned-only ADR-004 test
+ * can create a competing claim without polluting the KAD-33 conflict test,
+ * which asserts on the exact set of competing deck names. Sharing one stack
+ * made the two tests order-dependent.
+ */
+const CLAIMED = `E2E Claimed ${NONCE}`;
 
 // Two printings share this oracle id: the deck names printing A, the
 // collection holds printing B. Oracle-level matching is what makes that
@@ -75,6 +84,13 @@ const reprintOwned: SeedCard = {
   prices: '{"usd":"7.00"}',
 };
 
+const claimedCard: SeedCard = {
+  id: randomUUID(),
+  name: CLAIMED,
+  oracleId: randomUUID(),
+  prices: '{"usd":"3.00"}',
+};
+
 const SEED_CARDS = [
   commanderCard,
   ownedCard,
@@ -82,6 +98,7 @@ const SEED_CARDS = [
   unownedCard,
   reprintWanted,
   reprintOwned,
+  claimedCard,
 ];
 
 function seed(): void {
@@ -118,6 +135,14 @@ function seed(): void {
      )`,
   );
 
+  // The typeahead reads `cards_fts`, which the ingest normally populates -
+  // a direct INSERT INTO cards does not reach it, so KAD-35's owned-only
+  // test would find nothing in either mode without this.
+  const insertFts = db.prepare(
+    `INSERT INTO cards_fts (rowid, name, type_line, oracle_text)
+     SELECT rowid, name, type_line, oracle_text FROM cards WHERE id = ?`,
+  );
+
   const run = db.transaction(() => {
     SEED_CARDS.forEach((card, index) => {
       insertCard.run({
@@ -128,6 +153,7 @@ function seed(): void {
         collectorNumber: `${NONCE}-${String(index)}`,
         now,
       });
+      insertFts.run(card.id);
     });
   });
   run();
@@ -137,6 +163,9 @@ function seed(): void {
 /** The stack holding the single copy of FULLY_OWNED - the one two decks
  *  fight over in the conflict test. */
 let ownedStackId = "";
+
+/** The stack behind CLAIMED - used only by the owned-only ADR-004 test. */
+let claimedStackId = "";
 
 /** Puts physical copies in the collection. */
 function seedStacks(): void {
@@ -152,8 +181,10 @@ function seedStacks(): void {
   );
 
   ownedStackId = randomUUID();
+  claimedStackId = randomUUID();
   const run = db.transaction(() => {
     insert.run(ownedStackId, ownedCard.id, 1, `Binder ${NONCE}`, now, now);
+    insert.run(claimedStackId, claimedCard.id, 1, `Binder ${NONCE}`, now, now);
     // 1 of the 4 the deck wants.
     insert.run(randomUUID(), partialCard.id, 1, `Binder ${NONCE}`, now, now);
     // The *other* printing of the reprinted card.
@@ -182,8 +213,13 @@ function allocate(deckId: string, collectionItemId: string, quantity: number): v
   db.close();
 }
 
-/** A second deck claiming the same single copy of FULLY_OWNED. */
-function seedCompetingDeck(name: string): string {
+/** A second deck claiming one physical copy of `card`, defaulting to the
+ *  single copy of FULLY_OWNED. */
+function seedCompetingDeck(
+  name: string,
+  card: SeedCard = ownedCard,
+  stackId: string = ownedStackId,
+): string {
   const db = new Database(DB_PATH);
   db.pragma("foreign_keys = ON");
   const now = Date.now();
@@ -197,10 +233,10 @@ function seedCompetingDeck(name: string): string {
   db.prepare(
     `INSERT INTO deck_cards (id, deck_id, scryfall_id, board, category, quantity, created_at, updated_at)
      VALUES (?, ?, ?, 'main', '', 1, ?, ?)`,
-  ).run(randomUUID(), deckId, ownedCard.id, now, now);
+  ).run(randomUUID(), deckId, card.id, now, now);
   db.close();
 
-  allocate(deckId, ownedStackId, 1);
+  allocate(deckId, stackId, 1);
   return deckId;
 }
 
@@ -278,6 +314,45 @@ test("summarizes the count and estimated cost of unowned cards (AC3)", async ({ 
   await expect(summary).toContainText("2 cards missing");
   await expect(summary).toContainText("4 copies");
   await expect(summary).toContainText("$17.50");
+});
+
+test("owned-only mode restricts the typeahead to owned cards (KAD-35 AC1)", async ({ page }) => {
+  const deckId = seedDeck();
+  await page.goto(`/decks/${deckId}`);
+
+  const results = page.getByRole("list", { name: "Card search results" });
+
+  // Off: the unowned card is offered, because the full catalogue is.
+  await page.getByLabel("Add a card").fill(UNOWNED);
+  await expect(results.getByRole("button", { name: new RegExp(UNOWNED) })).toBeVisible();
+
+  // On: it disappears. Note the term is unchanged - flipping the toggle has
+  // to re-run the search, not wait for the next keystroke.
+  await page.getByLabel("Owned only").check();
+  await expect(results.getByRole("button", { name: new RegExp(UNOWNED) })).toHaveCount(0);
+
+  // ...and an owned card survives the filter, with its availability shown.
+  await page.getByLabel("Add a card").fill(FULLY_OWNED);
+  await expect(results.getByRole("button", { name: new RegExp(FULLY_OWNED) })).toBeVisible();
+  await expect(results).toContainText("1 owned");
+});
+
+test("owned-only still offers a card another deck has claimed (ADR-004)", async ({ page }) => {
+  // Advisory allocation: the copy is spoken for, but excluding it would
+  // enforce a reservation the rest of the app deliberately does not.
+  const deckId = seedDeck();
+  // Its own card and stack, so this claim cannot leak into the KAD-33 test's
+  // assertion about exactly which decks are competing.
+  seedCompetingDeck(`E2E Claimer ${randomUUID().slice(0, 8)}`, claimedCard, claimedStackId);
+
+  await page.goto(`/decks/${deckId}`);
+  await page.getByLabel("Owned only").check();
+  await page.getByLabel("Add a card").fill(CLAIMED);
+
+  const results = page.getByRole("list", { name: "Card search results" });
+  await expect(results.getByRole("button", { name: new RegExp(CLAIMED) })).toBeVisible();
+  // Shown as spent rather than hidden.
+  await expect(results).toContainText("0 free");
 });
 
 test("names the competing deck when two decks want the same copy (KAD-33 AC2)", async ({

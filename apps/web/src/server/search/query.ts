@@ -10,12 +10,31 @@ import { type CardRow, cards } from "../db/schema";
  * return - `db.all()` against raw SQL bypasses Drizzle's column mapping
  * entirely.
  */
-export function searchCards(query: string, limit = 50): CardRow[] {
+export function searchCards(query: string, limit = 50, ownedOnly = false): CardRow[] {
+  // Applied inside the FTS query rather than by filtering its output: a
+  // post-filter would have to over-fetch by an unknown factor (most of the
+  // ~104.7k cards are not owned) and would still silently return short.
+  //
+  // Owned is matched at *oracle* level, the same rule as KAD-32's badge - a
+  // deck can play any printing, so restricting to the exact `scryfall_id`
+  // would hide cards the user demonstrably owns. The `ci.scryfall_id =
+  // cards.id` arm covers cards with no oracle id, which cannot be matched
+  // any other way.
+  const ownedFilter = ownedOnly
+    ? sql`AND EXISTS (
+            SELECT 1 FROM collection_items ci
+            JOIN cards owned_card ON owned_card.id = ci.scryfall_id
+            WHERE ci.scryfall_id = cards.id
+               OR (cards.oracle_id IS NOT NULL AND owned_card.oracle_id = cards.oracle_id)
+          )`
+    : sql``;
+
   const matches = db.all<{ id: string }>(sql`
     SELECT cards.id AS id
     FROM cards_fts
     JOIN cards ON cards.rowid = cards_fts.rowid
     WHERE cards_fts MATCH ${query}
+    ${ownedFilter}
     ORDER BY rank
     LIMIT ${limit}
   `);

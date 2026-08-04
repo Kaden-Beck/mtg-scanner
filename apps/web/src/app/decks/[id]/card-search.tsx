@@ -22,11 +22,19 @@ function isSuggestionResponse(body: unknown): body is { cards: CardSuggestion[] 
   return Array.isArray(body.cards);
 }
 
+/** "2 owned · 1 free", or "" when the user owns none. Kept next to the
+ *  component because it is one line and has no branch worth a test file. */
+function availabilityText(card: CardSuggestion): string {
+  if (card.owned === 0) return "";
+  return `${String(card.owned)} owned · ${String(card.free)} free`;
+}
+
 export function CardSearch({ categories }: { categories: string[] }) {
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<CardSuggestion[]>([]);
   const [selected, setSelected] = useState<CardSuggestion | null>(null);
   const [preview, setPreview] = useState<CardSuggestion | null>(null);
+  const [ownedOnly, setOwnedOnly] = useState(false);
   const listId = useId();
 
   useEffect(() => {
@@ -42,7 +50,8 @@ export function CardSearch({ categories }: { categories: string[] }) {
         return;
       }
 
-      fetch(`/api/cards/search?q=${encodeURIComponent(term)}`, { signal: controller.signal })
+      const url = `/api/cards/search?q=${encodeURIComponent(term)}${ownedOnly ? "&owned=1" : ""}`;
+      fetch(url, { signal: controller.signal })
         .then(async (response) => {
           const body: unknown = await response.json();
           return isSuggestionResponse(body) ? body.cards : [];
@@ -60,7 +69,10 @@ export function CardSearch({ categories }: { categories: string[] }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [term]);
+    // `ownedOnly` is a dependency, not just an argument: flipping the toggle
+    // has to re-run the search against the term already typed, otherwise the
+    // user sees the previous mode's results until they touch the input.
+  }, [term, ownedOnly]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -79,6 +91,26 @@ export function CardSearch({ categories }: { categories: string[] }) {
         type="search"
         value={term}
       />
+
+      {/* KAD-35. Restricts to cards the user *owns*, not to unallocated ones:
+          ADR-004 makes allocation advisory, so refusing to offer a card
+          another deck has claimed would enforce a reservation the rest of the
+          app deliberately does not. Claimed copies sort below free ones
+          instead. */}
+      <label className="flex items-center gap-2 text-sm text-neutral-300">
+        <input
+          checked={ownedOnly}
+          className="size-4"
+          // Deliberately unnamed: this is client-only view state, and a named
+          // input inside the parent form would post a field the Server Action
+          // never asked for.
+          onChange={(event) => {
+            setOwnedOnly(event.target.checked);
+          }}
+          type="checkbox"
+        />
+        Owned only
+      </label>
 
       {selected ? (
         // `role="status"` rather than a bare <p>: the label is split across
@@ -130,6 +162,11 @@ export function CardSearch({ categories }: { categories: string[] }) {
               >
                 <span>{card.name}</span>
                 <span className="shrink-0 text-neutral-500">
+                  {availabilityText(card) !== "" ? (
+                    <span className={card.free > 0 ? "mr-2 text-green-400" : "mr-2 text-amber-400"}>
+                      {availabilityText(card)}
+                    </span>
+                  ) : null}
                   {card.setCode.toUpperCase()} · {card.typeLine}
                 </span>
               </button>
