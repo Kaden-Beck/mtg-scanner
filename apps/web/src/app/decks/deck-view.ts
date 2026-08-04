@@ -58,6 +58,19 @@ export function boardCount(entries: DeckEntryView[], board: DeckBoard): number {
   return entriesForBoard(entries, board).reduce((total, item) => total + item.entry.quantity, 0);
 }
 
+/**
+ * Which entries feed the "what would it cost to finish this deck" summary
+ * (KAD-32 AC3): main and sideboard, never the maybe board.
+ *
+ * The maybe board is a wishlist of cards the user is *considering*, so
+ * folding it into the cost would answer a question nobody asked and inflate
+ * the number that is supposed to mean "to sleeve this deck up". Ownership
+ * badges still render on maybe-board cards - only the money is scoped.
+ */
+export function ownedSummaryEntries(entries: DeckEntryView[]): DeckEntryView[] {
+  return entries.filter((item) => item.entry.board !== "maybe");
+}
+
 /** Distinct categories already used in this deck, for the datalist that
  * makes the free-form category field behave like a picker without becoming
  * a closed vocabulary. */

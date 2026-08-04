@@ -1,8 +1,9 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import { db } from "../db/client";
-import { type CardRow, cards, type DeckRow, deckCards, decks } from "../db/schema";
+import { type CardRow, cards, collectionItems, type DeckRow, deckCards, decks } from "../db/schema";
 import { type Color, deriveColorIdentity } from "./color-identity";
 import { type DeckForValidation, type LegalityResult, validateDeck } from "./legality";
+import { type EntryOwnership, type OwnedStack, resolveEntryOwnership } from "./ownership";
 
 /**
  * The DB-touching half of deck derivation, kept separate from
@@ -87,4 +88,89 @@ export function loadDeckForValidation(deck: DeckRow): DeckForValidation {
 export function validateDeckById(id: string): LegalityResult | undefined {
   const deck = db.select().from(decks).where(eq(decks.id, id)).get();
   return deck ? validateDeck(loadDeckForValidation(deck)) : undefined;
+}
+
+/** What `loadDeckOwnership` needs off each deck entry - structural rather
+ *  than the app's `DeckEntryView`, so `server/` doesn't import from `app/`. */
+export interface OwnershipInput {
+  entry: { id: string; scryfallId: string; quantity: number };
+  card: CardRow;
+}
+
+/**
+ * Ownership for every entry in a deck (KAD-32), keyed by `deckCards.id`.
+ *
+ * Matching is at **oracle** level, not printing level: in paper any printing
+ * of Sol Ring goes in the deck, so restricting to the exact `scryfall_id`
+ * would report a card as unowned while a copy sits in the box. The exact
+ * printing is still distinguished on each stack (`exactPrinting`) so the UI
+ * can say "you own this, but a different art".
+ *
+ * One query for the whole deck rather than one per card. A Commander deck is
+ * ~100 entries, so this binds ~200 parameters worst case - well inside
+ * SQLite's limit, but it is the reason the ids are deduped first (see the
+ * `cards` batch-size note in CLAUDE.md for what happens when that stops
+ * being true).
+ */
+export function loadDeckOwnership(items: OwnershipInput[]): Map<string, EntryOwnership> {
+  const result = new Map<string, EntryOwnership>();
+  if (items.length === 0) return result;
+
+  const scryfallIds = [...new Set(items.map((item) => item.entry.scryfallId))];
+  const oracleIds = [
+    ...new Set(items.map((item) => item.card.oracleId).filter((id): id is string => id !== null)),
+  ];
+
+  // `inArray` with an empty array compiles to invalid SQL, so each side of
+  // the OR is only included when it has values. `oracleIds` can legitimately
+  // be empty - `cards.oracle_id` is nullable.
+  const filters = [
+    inArray(collectionItems.scryfallId, scryfallIds),
+    ...(oracleIds.length > 0 ? [inArray(cards.oracleId, oracleIds)] : []),
+  ];
+
+  const rows = db
+    .select({ stack: collectionItems, oracleId: cards.oracleId })
+    .from(collectionItems)
+    .innerJoin(cards, eq(collectionItems.scryfallId, cards.id))
+    .where(or(...filters))
+    .all();
+
+  const byOracle = new Map<string, typeof rows>();
+  const byScryfall = new Map<string, typeof rows>();
+  for (const row of rows) {
+    if (row.oracleId !== null) push(byOracle, row.oracleId, row);
+    push(byScryfall, row.stack.scryfallId, row);
+  }
+
+  for (const item of items) {
+    // Oracle id is the key when there is one; a card without one (Scryfall
+    // leaves it off some non-card objects) can only be matched on its own
+    // printing, which is the correct conservative answer rather than a crash.
+    const matches =
+      item.card.oracleId !== null
+        ? (byOracle.get(item.card.oracleId) ?? [])
+        : (byScryfall.get(item.entry.scryfallId) ?? []);
+
+    const stacks: OwnedStack[] = matches.map((row) => ({
+      collectionItemId: row.stack.id,
+      scryfallId: row.stack.scryfallId,
+      quantity: row.stack.quantity,
+      finish: row.stack.finish,
+      condition: row.stack.condition,
+      binderLocation: row.stack.binderLocation,
+      isProxy: row.stack.isProxy,
+      exactPrinting: row.stack.scryfallId === item.entry.scryfallId,
+    }));
+
+    result.set(item.entry.id, resolveEntryOwnership(item.entry.quantity, stacks));
+  }
+
+  return result;
+}
+
+function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const existing = map.get(key);
+  if (existing) existing.push(value);
+  else map.set(key, [value]);
 }

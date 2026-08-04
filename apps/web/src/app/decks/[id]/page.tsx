@@ -6,7 +6,8 @@ import { connection } from "next/server";
 import { db } from "@/server/db/client";
 import { cards, deckCards } from "@/server/db/schema";
 import { getDeck, listDeckCards } from "@/server/decks/decks";
-import { deckColorIdentity, validateDeckById } from "@/server/decks/hydrate";
+import { deckColorIdentity, loadDeckOwnership, validateDeckById } from "@/server/decks/hydrate";
+import { summarizeUnowned } from "@/server/decks/ownership";
 import { addCardAction, removeCardAction, updateCardAction } from "../actions";
 import {
   boardSummary,
@@ -15,8 +16,10 @@ import {
   entriesForBoard,
   groupByCategory,
   knownCategories,
+  ownedSummaryEntries,
 } from "../deck-view";
 import { LegalityReport } from "../legality-report";
+import { OwnershipBadge, OwnershipDetail, UnownedSummaryLine } from "../ownership-badge";
 import { CardSearch } from "./card-search";
 
 function loadEntries(deckId: string): DeckEntryView[] {
@@ -51,6 +54,15 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
   const validation = validateDeckById(id);
   const categories = knownCategories(entries);
 
+  // One query for the whole deck (KAD-32), not one per card.
+  const ownership = loadDeckOwnership(entries);
+  const unowned = summarizeUnowned(
+    ownedSummaryEntries(entries).flatMap((item) => {
+      const entryOwnership = ownership.get(item.entry.id);
+      return entryOwnership ? [{ card: item.card, ownership: entryOwnership }] : [];
+    }),
+  );
+
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-6 p-4">
       <div className="flex flex-col gap-1">
@@ -66,6 +78,8 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {validation ? <LegalityReport result={validation} /> : null}
+
+      {entries.length > 0 ? <UnownedSummaryLine summary={unowned} /> : null}
 
       <form action={addCardAction.bind(null, id)} className="rounded border border-neutral-800 p-3">
         <CardSearch categories={categories} />
@@ -88,13 +102,23 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
                 <ul className="mt-1 flex flex-col divide-y divide-neutral-900">
                   {group.entries.map(({ entry, card }) => {
                     const image = cardImageUrl(card, "normal");
+                    const entryOwnership = ownership.get(entry.id);
                     return (
                       <li className="flex flex-wrap items-center gap-2 py-1 text-sm" key={entry.id}>
                         {/* `title` gives a tap/hover preview target on the
                             card name even where the image is absent. */}
                         <span className="min-w-0 flex-1 text-neutral-100" title={card.typeLine}>
                           {entry.quantity}× {card.name}
+                          {entryOwnership ? (
+                            <span className="ml-2 block sm:inline">
+                              <OwnershipDetail ownership={entryOwnership} />
+                            </span>
+                          ) : null}
                         </span>
+
+                        {entryOwnership ? (
+                          <OwnershipBadge cardName={card.name} ownership={entryOwnership} />
+                        ) : null}
 
                         {image ? (
                           // biome-ignore lint/performance/noImgElement: Scryfall CDN images, same call as the collection page
