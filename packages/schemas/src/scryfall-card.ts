@@ -60,6 +60,12 @@ export const scryfallCardSchema = z
     promo: z.boolean(),
     variation: z.boolean(),
     image_uris: z.record(z.string(), z.string()).optional(),
+    // The artwork identity the hash index is keyed on (KAD-24): thousands of
+    // printings are reprints of the same art, and hashing each one would be
+    // ~96.5k images to store ~47.4k distinct hashes. Optional for the same
+    // reason `oracle_id` is - reversible and double-faced layouts carry it
+    // per-face rather than at the top level.
+    illustration_id: z.string().optional(),
     scryfall_uri: z.string(),
     prices: z.record(z.string(), z.string().nullable()),
   })

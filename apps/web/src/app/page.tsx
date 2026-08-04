@@ -1,15 +1,14 @@
 import Link from "next/link";
 import type { SyncType } from "@/server/db/schema";
 import { countOpenReconciliationRows } from "@/server/import/reconciliation";
-import { triggerCardSync, triggerPriceRefresh } from "@/server/sync/actions";
+import { triggerCardSync, triggerHashIndexBuild, triggerPriceRefresh } from "@/server/sync/actions";
 import { getSyncStatuses, type SyncStatusView } from "@/server/sync/status";
 import { formatDateTime, statusBadgeClass, statusLabel } from "./sync-status-format";
 
-// hash_index (KAD-24) has no job to trigger yet - omitted rather than given
-// a no-op action.
 const TRIGGER_ACTIONS: Partial<Record<SyncType, () => Promise<void>>> = {
   cards: triggerCardSync,
   prices: triggerPriceRefresh,
+  hash_index: triggerHashIndexBuild,
 };
 
 function SyncRow({ view }: { view: SyncStatusView }) {
@@ -41,6 +40,16 @@ function SyncRow({ view }: { view: SyncStatusView }) {
         {view.syncType === "prices" && (
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
             Prices are estimates for trends only, not authoritative market values.
+          </p>
+        )}
+        {view.syncType === "hash_index" && (
+          // Said plainly, because the other two buttons on this page finish
+          // in under a minute and this one does not. It is safe to interrupt
+          // and safe to re-run, which is the part that makes a multi-hour
+          // button reasonable to offer at all.
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+            Downloads and hashes roughly 47,000 card artworks - this takes hours. It picks up where
+            it left off, so it is safe to stop and start again.
           </p>
         )}
       </div>

@@ -39,6 +39,7 @@ export function toCardRow(card: ScryfallCard, now: Date): NewCardRow {
     finishes: card.finishes,
     cardFaces: card.card_faces ?? null,
     imageUris: card.image_uris ?? null,
+    illustrationId: card.illustration_id ?? null,
     scryfallUri: card.scryfall_uri,
     prices: card.prices,
     createdAt: now,

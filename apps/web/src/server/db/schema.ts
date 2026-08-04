@@ -52,6 +52,10 @@ export const cards = sqliteTable(
     finishes: text("finishes", { mode: "json" }).$type<string[]>().notNull(),
     cardFaces: text("card_faces", { mode: "json" }).$type<unknown>(),
     imageUris: text("image_uris", { mode: "json" }).$type<Record<string, string>>(),
+    // Artwork identity, shared across every reprint of the same art (KAD-24).
+    // Nullable for the same reason `oracle_id` is: reversible and
+    // double-faced layouts carry it per-face rather than top-level.
+    illustrationId: text("illustration_id"),
     scryfallUri: text("scryfall_uri").notNull(),
 
     prices: text("prices", { mode: "json" }).$type<Record<string, string | null>>().notNull(),
@@ -74,6 +78,10 @@ export const cards = sqliteTable(
     index("cards_set_code_idx").on(table.setCode),
     index("cards_rarity_idx").on(table.rarity),
     index("cards_cmc_idx").on(table.cmc),
+    // The hash index job groups printings by artwork and then propagates
+    // hashes back onto every printing sharing one - both directions of that
+    // are lookups on this column (KAD-24).
+    index("cards_illustration_id_idx").on(table.illustrationId),
   ],
 );
 
@@ -269,3 +277,35 @@ export const importReconciliationRows = sqliteTable(
 
 export type ImportReconciliationRowRow = typeof importReconciliationRows.$inferSelect;
 export type NewImportReconciliationRowRow = typeof importReconciliationRows.$inferInsert;
+
+/**
+ * One row per distinct artwork, keyed on Scryfall's `illustration_id`
+ * (KAD-24).
+ *
+ * Keyed on the artwork rather than the printing for two reasons. There are
+ * ~47.4k distinct artworks behind ~96.5k paper printings, so this halves the
+ * work; and it is a *stable* key, which is what makes the job resumable -
+ * "the artworks with no row here yet" is both the initial work list and the
+ * incremental one, so killing the job mid-run and restarting redoes nothing.
+ *
+ * `cards.art_phash` / `cards.full_phash` are then filled from this table with
+ * a single join at the end of a run. Those columns are the ones the scanner
+ * reads; this table is the durable record of what has actually been hashed.
+ */
+export const artworkHashes = sqliteTable("artwork_hashes", {
+  illustrationId: text("illustration_id").primaryKey(),
+  /** 8-byte big-endian 64-bit DCT hash of `art_crop` - see packages/phash. */
+  artPhash: blob("art_phash", { mode: "buffer" }).notNull(),
+  /**
+   * Same, of the `small` full-card image. Nullable because a run can succeed
+   * at the art crop and fail at the full card; the art hash is the one the
+   * recognizer needs, so a missing full hash must not discard both.
+   */
+  fullPhash: blob("full_phash", { mode: "buffer" }),
+  /** Which printing's images were actually fetched, for tracing a bad hash. */
+  sourceCardId: text("source_card_id").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export type ArtworkHashRow = typeof artworkHashes.$inferSelect;
+export type NewArtworkHashRow = typeof artworkHashes.$inferInsert;

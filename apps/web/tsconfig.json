@@ -1,7 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2017",
+    // ES2022 rather than create-next-app's ES2017 default: `@mtg/phash` is
+    // consumed as TS source and its 64-bit hashes are BigInt literals, which
+    // tsc rejects outright below ES2020. Typecheck-only (`noEmit`) - Next
+    // drives the actual browser transpilation from browserslist, not this.
+    "target": "ES2022",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,

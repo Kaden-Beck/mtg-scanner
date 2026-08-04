@@ -21,12 +21,13 @@ const SYNC_TYPE_LABELS: Record<SyncType, string> = {
   hash_index: "Hash index",
 };
 
-// The hash index build (KAD-24) lands in a later sprint - shown here so the
-// status page's shape doesn't change out from under KAD-9 when it does.
 const TRIGGERABLE: Record<SyncType, boolean> = {
   cards: true,
   prices: true,
-  hash_index: false,
+  // Triggerable as of KAD-24. Unlike the other two this is a multi-hour run
+  // over ~47.4k images; the page warns about that next to the button rather
+  // than presenting it as another half-minute sync.
+  hash_index: true,
 };
 
 /**
