@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { db } from "@/server/db/client";
 import { cards, deckCards } from "@/server/db/schema";
+import { loadDeckConflicts } from "@/server/decks/allocation-store";
 import { getDeck, listDeckCards } from "@/server/decks/decks";
 import { deckColorIdentity, loadDeckOwnership, validateDeckById } from "@/server/decks/hydrate";
 import { summarizeUnowned } from "@/server/decks/ownership";
@@ -19,7 +20,13 @@ import {
   ownedSummaryEntries,
 } from "../deck-view";
 import { LegalityReport } from "../legality-report";
-import { OwnershipBadge, OwnershipDetail, UnownedSummaryLine } from "../ownership-badge";
+import {
+  ConflictBadge,
+  ConflictSummaryLine,
+  OwnershipBadge,
+  OwnershipDetail,
+  UnownedSummaryLine,
+} from "../ownership-badge";
 import { CardSearch } from "./card-search";
 
 function loadEntries(deckId: string): DeckEntryView[] {
@@ -56,6 +63,9 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
 
   // One query for the whole deck (KAD-32), not one per card.
   const ownership = loadDeckOwnership(entries);
+  // Read-time, per ADR-004 - no write-time constraint exists to lean on, so
+  // this is the only thing that tells the user two decks want the same copy.
+  const conflicts = loadDeckConflicts(id);
   const unowned = summarizeUnowned(
     ownedSummaryEntries(entries).flatMap((item) => {
       const entryOwnership = ownership.get(item.entry.id);
@@ -80,6 +90,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
       {validation ? <LegalityReport result={validation} /> : null}
 
       {entries.length > 0 ? <UnownedSummaryLine summary={unowned} /> : null}
+      <ConflictSummaryLine conflictsByEntry={conflicts} />
 
       <form action={addCardAction.bind(null, id)} className="rounded border border-neutral-800 p-3">
         <CardSearch categories={categories} />
@@ -119,6 +130,11 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
                         {entryOwnership ? (
                           <OwnershipBadge cardName={card.name} ownership={entryOwnership} />
                         ) : null}
+
+                        <ConflictBadge
+                          cardName={card.name}
+                          conflicts={conflicts.get(entry.id) ?? []}
+                        />
 
                         {image ? (
                           // biome-ignore lint/performance/noImgElement: Scryfall CDN images, same call as the collection page

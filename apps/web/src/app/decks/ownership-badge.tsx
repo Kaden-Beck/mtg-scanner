@@ -1,5 +1,7 @@
+import type { ContendedStack } from "@/server/decks/allocation";
 import type { EntryOwnership, UnownedSummary } from "@/server/decks/ownership";
 import { formatUnownedSummary } from "@/server/decks/ownership";
+import { conflictLabel, conflictLine, conflictSummary } from "./conflict-format";
 import { ownershipBadgeLabel, ownershipBadgeText, ownershipDetail } from "./ownership-format";
 
 const TONE_STYLES = {
@@ -47,6 +49,56 @@ export function OwnershipDetail({ ownership }: { ownership: EntryOwnership }) {
   const detail = ownershipDetail(ownership);
   if (detail === "") return null;
   return <span className="text-xs text-neutral-500">{detail}</span>;
+}
+
+/**
+ * Cross-deck allocation conflict (KAD-33 AC2).
+ *
+ * Always names a competing deck - "there is a conflict" would be the
+ * allocation equivalent of "deck is illegal". Same visually-hidden-span
+ * treatment as the ownership badge, and for the same reason: the visible
+ * text is truncated to two deck names, so the accessible sentence carries the
+ * full list plus the shortfall the short line leaves implicit.
+ */
+export function ConflictBadge({
+  cardName,
+  conflicts,
+}: {
+  cardName: string;
+  conflicts: ContendedStack[];
+}) {
+  if (conflicts.length === 0) return null;
+  return (
+    <span className="rounded border border-orange-800 bg-orange-950/40 px-1.5 py-0.5 text-xs whitespace-nowrap text-orange-300">
+      <span aria-hidden="true">{conflictLine(conflicts)}</span>
+      <span className="sr-only">{conflictLabel(cardName, conflicts)}</span>
+    </span>
+  );
+}
+
+/**
+ * Deck-level conflict count.
+ *
+ * ADR-004 records the accepted cost that "owned" never means "available right
+ * now" - two decks can both report fully owned while sharing one copy. This
+ * line is what makes the availability question reachable from the same place
+ * ownership is claimed, so it renders next to the ownership summary rather
+ * than somewhere the user has to go looking.
+ */
+export function ConflictSummaryLine({
+  conflictsByEntry,
+}: {
+  conflictsByEntry: Map<string, ContendedStack[]>;
+}) {
+  const text = conflictSummary(conflictsByEntry);
+  if (text === "") return null;
+  return (
+    <section aria-label="Deck allocation conflicts">
+      <p className="rounded border border-orange-800 bg-orange-950/40 px-3 py-2 text-sm text-orange-300">
+        {text}
+      </p>
+    </section>
+  );
 }
 
 /**

@@ -16,6 +16,7 @@ import {
   type NewDeckCardRow,
   type NewDeckRow,
 } from "../db/schema";
+import { syncDeckAllocations } from "./allocation-store";
 
 export class CardNotFoundError extends Error {
   constructor(public readonly scryfallId: string) {
@@ -161,6 +162,7 @@ export function addOrMergeDeckCard(deckId: string, request: CreateDeckCardReques
 
   const merged = findDeckCardEntry(deckId, request.scryfallId, request.board);
   if (!merged) throw new Error("deck card vanished immediately after upsert");
+  syncDeckAllocations(deckId);
   return merged;
 }
 
@@ -193,6 +195,7 @@ export function updateDeckCard(id: string, patch: UpdateDeckCardRequest): Update
 
   const row = getDeckCard(id);
   if (!row) throw new Error("deck card vanished immediately after update");
+  syncDeckAllocations(row.deckId);
   return { outcome: "updated", row };
 }
 
@@ -200,5 +203,8 @@ export function removeDeckCard(id: string): boolean {
   const existing = getDeckCard(id);
   if (!existing) return false;
   db.delete(deckCards).where(eq(deckCards.id, id)).run();
+  // After the delete, so the recompute sees the deck as it now is - and on
+  // the *captured* deck id, since the row is gone by this point.
+  syncDeckAllocations(existing.deckId);
   return true;
 }

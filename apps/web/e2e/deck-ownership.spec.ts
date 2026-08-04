@@ -96,7 +96,9 @@ function seed(): void {
   db.prepare(`DELETE FROM deck_cards WHERE scryfall_id IN (${stale})`).run(staleBefore);
   db.prepare(`DELETE FROM collection_items WHERE scryfall_id IN (${stale})`).run(staleBefore);
   db.prepare(`DELETE FROM decks WHERE commander_card_id IN (${stale})`).run(staleBefore);
-  db.prepare(`DELETE FROM cards WHERE set_code = '${SET_CODE}' AND created_at < ?`).run(staleBefore);
+  db.prepare(`DELETE FROM cards WHERE set_code = '${SET_CODE}' AND created_at < ?`).run(
+    staleBefore,
+  );
 
   const insertCard = db.prepare(
     `INSERT INTO cards (
@@ -132,6 +134,10 @@ function seed(): void {
   db.close();
 }
 
+/** The stack holding the single copy of FULLY_OWNED - the one two decks
+ *  fight over in the conflict test. */
+let ownedStackId = "";
+
 /** Puts physical copies in the collection. */
 function seedStacks(): void {
   const db = new Database(DB_PATH);
@@ -145,8 +151,9 @@ function seedStacks(): void {
      ) VALUES (?, ?, 'nonfoil', 'NM', ?, 0, ?, 'en', ?, ?)`,
   );
 
+  ownedStackId = randomUUID();
   const run = db.transaction(() => {
-    insert.run(randomUUID(), ownedCard.id, 1, `Binder ${NONCE}`, now, now);
+    insert.run(ownedStackId, ownedCard.id, 1, `Binder ${NONCE}`, now, now);
     // 1 of the 4 the deck wants.
     insert.run(randomUUID(), partialCard.id, 1, `Binder ${NONCE}`, now, now);
     // The *other* printing of the reprinted card.
@@ -154,6 +161,47 @@ function seedStacks(): void {
   });
   run();
   db.close();
+}
+
+/**
+ * Allocation rows, written directly.
+ *
+ * The specs seed decks through SQL rather than the UI, which skips the
+ * `syncDeckAllocations` call on the real write path - so without this the
+ * allocation table stays empty and no conflict could ever appear. These rows
+ * are exactly what that function would have produced.
+ */
+function allocate(deckId: string, collectionItemId: string, quantity: number): void {
+  const db = new Database(DB_PATH);
+  db.pragma("foreign_keys = ON");
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO deck_allocations (id, deck_id, collection_item_id, quantity, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(randomUUID(), deckId, collectionItemId, quantity, now, now);
+  db.close();
+}
+
+/** A second deck claiming the same single copy of FULLY_OWNED. */
+function seedCompetingDeck(name: string): string {
+  const db = new Database(DB_PATH);
+  db.pragma("foreign_keys = ON");
+  const now = Date.now();
+  const deckId = randomUUID();
+
+  db.prepare(
+    `INSERT INTO decks (id, name, format, description, commander_card_id, partner_card_id, created_at, updated_at)
+     VALUES (?, ?, 'commander', '', ?, NULL, ?, ?)`,
+  ).run(deckId, name, commanderCard.id, now, now);
+
+  db.prepare(
+    `INSERT INTO deck_cards (id, deck_id, scryfall_id, board, category, quantity, created_at, updated_at)
+     VALUES (?, ?, ?, 'main', '', 1, ?, ?)`,
+  ).run(randomUUID(), deckId, ownedCard.id, now, now);
+  db.close();
+
+  allocate(deckId, ownedStackId, 1);
+  return deckId;
 }
 
 function seedDeck(): string {
@@ -177,6 +225,9 @@ function seedDeck(): string {
   insertEntry.run(randomUUID(), deckId, reprintWanted.id, "main", "artifacts", 1, now, now);
 
   db.close();
+  // Deliberately does *not* allocate. Every test seeds its own deck, and if
+  // this claimed the shared stack then five decks would pile onto one copy
+  // and the conflict tests would drift as tests were added.
   return deckId;
 }
 
@@ -227,4 +278,26 @@ test("summarizes the count and estimated cost of unowned cards (AC3)", async ({ 
   await expect(summary).toContainText("2 cards missing");
   await expect(summary).toContainText("4 copies");
   await expect(summary).toContainText("$17.50");
+});
+
+test("names the competing deck when two decks want the same copy (KAD-33 AC2)", async ({
+  page,
+}) => {
+  // Both decks claim the single physical copy of FULLY_OWNED. Under ADR-004
+  // neither edit is refused, so this warning is the only thing that tells the
+  // user the two decks cannot both be sleeved up.
+  const first = seedDeck();
+  allocate(first, ownedStackId, 1);
+  const competitorName = `E2E Rival ${randomUUID().slice(0, 8)}`;
+  seedCompetingDeck(competitorName);
+
+  await page.goto(`/decks/${first}`);
+
+  await expect(page.getByText(`Also in ${competitorName}`)).toBeVisible();
+  await expect(
+    page.getByText(`${FULLY_OWNED}: short 1 copy, also allocated to ${competitorName}`),
+  ).toBeVisible();
+
+  const summary = page.getByRole("region", { name: "Deck allocation conflicts" });
+  await expect(summary).toContainText("1 card also allocated to another deck");
 });
