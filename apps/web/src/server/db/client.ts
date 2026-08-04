@@ -3,7 +3,11 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import * as schema from "./schema";
+// `.ts` extension, not extensionless: this module is now reachable from a
+// `node --experimental-strip-types` CLI (`corpus:label` -> `corpus/lookup.ts`
+// -> here), and Node's ESM loader does no extensionless resolution. Next and
+// Vitest accept the explicit form either way. See CLAUDE.md.
+import * as schema from "./schema.ts";
 
 // `import.meta.dirname` looks appealing here but Next's Turbopack SSR
 // bundle leaves it `undefined` at runtime (confirmed by actually running

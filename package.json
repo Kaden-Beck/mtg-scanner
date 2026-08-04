@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "test:perf": "vitest run --project perf",
     "corpus:validate": "node --experimental-strip-types packages/corpus/src/validate-cli.ts",
-    "corpus:gate": "node --experimental-strip-types packages/corpus/src/gate-cli.ts"
+    "corpus:gate": "node --experimental-strip-types packages/corpus/src/gate-cli.ts",
+    "corpus:label": "pnpm --filter web corpus:label"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",

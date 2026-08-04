@@ -71,6 +71,12 @@ the set for those — don't leave them to the end.
 
 ## Step 3 — Shoot
 
+Use your phone's **ordinary built-in camera app**. There is nothing to run,
+nothing to serve, and your phone never talks to this project — the scanner
+does not exist yet, and building it is Sprint 7. That is the entire point of
+the corpus: it has to exist *before* the scanner, so there is something to
+measure the scanner against.
+
 Phone, handheld, over a table. **Not** a copy stand or a lightbox: that
 produces a corpus the scanner aces and reality fails.
 
@@ -97,32 +103,78 @@ per-card recall.
 | Low light | ~40 |
 | Harsh glare (desk lamp raking across foils) | ~30 |
 
-Name files sequentially — `001.jpg`, `002.jpg`, … — into
-`tests/corpus/images/`.
+### Shoot a marker photo between batches
+
+Before each session, photograph a sticky note reading e.g. `FOIL / LOW
+LIGHT`. When you are labelling weeks later, those dividers are what tell you
+where a batch starts — otherwise you are squinting at photo 217 trying to
+remember whether that was the indoor session.
+
+Delete the markers before labelling, or just `skip` them in the labeller.
+
+### Do not rename the files
+
+Keep whatever your phone produces — `IMG_20260804_143022.jpg` — and copy it
+into `tests/corpus/images/` as-is.
+
+Renaming 400 files to `001.jpg`, `002.jpg` … is a great way to silently
+misalign a label with the wrong photo, and a wrong `scryfallId` is the one
+error that quietly caps your measurable accuracy forever. Ugly filenames are
+the safe choice, and `pnpm corpus:label` reads the directory so you never
+type them anyway.
 
 ---
 
+## Step 3b — Get the photos onto the machine
+
+Plug the phone in over USB, choose **File transfer / MTP** on the phone, and
+it mounts in Files. Copy the JPEGs into:
+
+```
+tests/corpus/images/
+```
+
 ## Step 4 — Label
 
-Copy `tests/corpus/labels.example.json` to `tests/corpus/labels.json` and
-work through it.
+```sh
+podman exec -it mtg-dev sh -c "cd /workspace && pnpm corpus:label"
+```
 
-Per entry you need:
+> Note the **`-it`** — this one is interactive, unlike `corpus:validate`.
 
-- `scryfallId` — the exact **printing**
-- `oracleId` — the **card**, shared across its printings
-- `name`, `setCode`, `collectorNumber` — human-readable, for reading a
-  failure report without a DB lookup
-- `condition`, `finish`, `sleeve`, `frame`, `lighting` — the strata
-- `sharedArt` — see Step 1
-- `notes` — anything unusual about the shot
+It walks the images directory one photo at a time and writes
+`tests/corpus/labels.json` as it goes. For most cards you type **two tokens**:
 
-Both ids are validated as real UUIDs (version and variant nibbles included),
-so a hand-typed placeholder is rejected rather than quietly accepted.
+```
+dom 168
+```
+
+Everything else is resolved from the local `cards` table (104,760 rows,
+already synced — no network): `scryfallId`, `oracleId`, `name`, `frame`, and
+`sharedArt`. The strata you *do* supply are **sticky**, so within a batch you
+only type what changed:
+
+```
+c19 241 foil lp        # sets finish + condition for this and following cards
+dom 168                # inherits foil + lp
+mh2 250 nonfoil        # finish changes back, condition stays lp
+```
+
+Other commands: `skip` (marker photos, bad shots), `back` (fix the previous
+entry), `?` (show current sticky values), `quit` (saves and exits).
+
+It is **resumable** — already-labelled photos are skipped, so quit and come
+back as often as you like.
+
+> **`sharedArt` is computed, not asked.** It is true when more than one
+> printing shares this card's `illustration_id`, which the local table
+> already knows. That removes the field most likely to be got wrong by hand,
+> and it is the field that matters most.
 
 > **Accuracy here matters more than photo count.** A wrong `scryfallId`
 > silently caps the accuracy the scanner can *ever* be measured at, which is
-> worse than a missing photo.
+> worse than a missing photo. Resolving ids from the table rather than typing
+> them is the whole reason this tool exists.
 
 ---
 
@@ -140,6 +192,20 @@ Expect it to fail on corpus size until you're finished. That's the point:
 it's your progress bar.
 
 **Done when it exits clean.**
+
+---
+
+---
+
+## One honest caveat about phone photos
+
+Your camera app applies HDR, sharpening and noise reduction. The real scanner
+will process comparatively raw `getUserMedia` frames, so the corpus is
+slightly *kinder* than live capture will be.
+
+That is acceptable for a first baseline and is exactly what KAD-53's
+threshold tuning exists to correct — but it means the first numbers will be a
+mild over-estimate. Worth remembering rather than being surprised by.
 
 ---
 

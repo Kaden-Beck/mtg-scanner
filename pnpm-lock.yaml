@@ -47,6 +47,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@mtg/corpus':
+        specifier: workspace:*
+        version: link:../../packages/corpus
       '@mtg/phash':
         specifier: workspace:*
         version: link:../../packages/phash
