@@ -3,6 +3,7 @@ import type { ImportArchidektRequest } from "@mtg/schemas";
 import { scryfallIdSchema } from "@mtg/schemas";
 import { and, eq, isNull } from "drizzle-orm";
 import { createOrMergeCollectionItem } from "../collection/items";
+import { addTag } from "../collection/tags";
 import { db } from "../db/client";
 import {
   collectionItems,
@@ -152,10 +153,13 @@ export function importArchidektCsv(options: ImportArchidektOptions): ImportArchi
       finish: parseFinish(parsed.foilRaw),
       condition: parseCondition(parsed.conditionRaw),
       quantity: parsed.quantity,
-      isProxy: false,
-      binderLocation: "",
+      isProxy: parsed.isProxy,
+      binderLocation: parsed.binderLocation,
       language: parsed.language ?? "en",
     });
+    // Tags after the stack exists, never before: `collection_item_tags` has
+    // a foreign key to it, and the constraint is checked per statement.
+    for (const tag of parsed.tags) addTag(item.id, tag);
     db.insert(importBatchItems)
       .values({
         id: randomUUID(),

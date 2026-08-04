@@ -331,6 +331,77 @@ test("tags a stack, filters by the tag, and untags it (KAD-22 AC2)", async ({ pa
   await expect(page.getByText(TAG_CARD_NAME)).toHaveCount(0);
 });
 
+test("offers every export format, and flags the lossy one (KAD-23 AC1)", async ({ page }) => {
+  await page.goto("/collection");
+  const exports = page.getByRole("region", { name: "Export collection" });
+
+  await expect(exports.getByRole("link", { name: "JSON" })).toBeVisible();
+  await expect(exports.getByRole("link", { name: "CSV" })).toBeVisible();
+  // The caveat is the point of the test: someone reaching for "export" is
+  // quite likely reaching for a backup, and Moxfield text is not one.
+  await expect(exports.getByRole("link", { name: "Moxfield text (lossy)" })).toBeVisible();
+  await expect(exports.getByText(/Binder location, condition, proxy flag/)).toBeVisible();
+});
+
+/**
+ * Fetched through the browser context rather than clicked, because the route
+ * answers with `content-disposition: attachment` - the assertion worth making
+ * is about the bytes and the headers, and a download event tells us neither.
+ * This is also the only place the route's `connection()` call gets exercised
+ * at all: per CLAUDE.md it throws outside a real Next request scope, so
+ * Vitest cannot reach it by invoking `GET`.
+ */
+test("downloads the collection in each format (KAD-23 AC1)", async ({ page }) => {
+  await page.goto("/collection");
+
+  const json = await page.request.get("/api/export?format=json");
+  expect(json.status()).toBe(200);
+  expect(json.headers()["content-type"]).toContain("application/json");
+  expect(json.headers()["content-disposition"]).toMatch(
+    /attachment; filename="mtg-collection-\d{4}-\d{2}-\d{2}\.json"/,
+  );
+  const file = JSON.parse(await json.text()) as {
+    version: number;
+    items: { name: string; binderLocation: string; tags: string[] }[];
+  };
+  expect(file.version).toBe(1);
+  // The lossless format carries the fields the CSV shape had to be taught:
+  // this stack exists at a binder location, and that has to survive.
+  const seeded = file.items.find((item) => item.name === CARD_NAME);
+  expect(seeded?.binderLocation).toBe(BINDER);
+
+  const csv = await page.request.get("/api/export?format=csv");
+  expect(csv.headers()["content-type"]).toContain("text/csv");
+  const csvText = await csv.text();
+  expect(csvText).toContain(CARD_NAME);
+  expect(csvText).toContain(BINDER);
+
+  const moxfield = await page.request.get("/api/export?format=moxfield");
+  expect(moxfield.headers()["content-type"]).toContain("text/plain");
+  expect(await moxfield.text()).toContain(CARD_NAME);
+
+  const bad = await page.request.get("/api/export?format=nonsense");
+  expect(bad.status()).toBe(400);
+});
+
+test("round-trips an exported collection back in through the API (KAD-23 AC2)", async ({
+  page,
+}) => {
+  await page.goto("/collection");
+  const jsonText = await (await page.request.get("/api/export?format=json")).text();
+
+  // Re-importing into the *same* database merges rather than duplicating -
+  // `createOrMergeCollectionItem` semantics - so the assertion here is that
+  // the file is accepted and every row is understood, not that the
+  // collection is unchanged. Losslessness against a fresh database is what
+  // the round-trip contract test in `server/export/` proves.
+  const response = await page.request.post("/api/import/collection", { data: { jsonText } });
+  expect(response.status()).toBe(201);
+  const body = (await response.json()) as { imported: number; skipped: unknown[] };
+  expect(body.skipped).toEqual([]);
+  expect(body.imported).toBeGreaterThan(0);
+});
+
 test("keeps the primary controls in the lower third on phone width (NFR-7)", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/collection");

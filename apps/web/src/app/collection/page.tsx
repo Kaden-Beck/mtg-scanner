@@ -3,6 +3,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { BINDER_FACET_LIMIT, listBinderLocations } from "@/server/collection/binder-locations";
 import { listTags, listTagsForItems, TAG_FACET_LIMIT } from "@/server/collection/tags";
+import { EXPORT_FORMAT_INFO, EXPORT_FORMATS } from "@/server/export/formats";
 import { type CollectionSearchRow, runCollectionSearch } from "@/server/search/collection-search";
 import type { QueryErrorPresentation } from "@/server/search/query-errors";
 import { addTagAction, removeTagAction, updateBinderLocationAction } from "./actions";
@@ -208,6 +209,41 @@ function TagEditor({
   );
 }
 
+/**
+ * Export links (KAD-23 AC1). Plain anchors to the download route, so they
+ * work without JavaScript and can be right-clicked like any other file.
+ *
+ * The Moxfield caveat is rendered, not omitted: it is a deck-list format
+ * with nowhere to put a binder location, a condition or a tag, and someone
+ * reaching for "export" is quite likely to be reaching for a backup.
+ * Letting them pick the lossy one without saying so would be the failure.
+ */
+function ExportLinks() {
+  return (
+    <section aria-label="Export collection" className="flex flex-wrap items-center gap-2 text-xs">
+      <span className="text-zinc-500 dark:text-zinc-500">Export:</span>
+      {EXPORT_FORMATS.map((format) => {
+        const info = EXPORT_FORMAT_INFO[format];
+        return (
+          <a
+            key={format}
+            href={`/api/export?format=${format}`}
+            title={info.lossyNote ?? undefined}
+            className="rounded-md border border-zinc-300 px-3 py-1 font-medium dark:border-zinc-700"
+          >
+            {info.label}
+            {info.lossyNote !== null && " (lossy)"}
+          </a>
+        );
+      })}
+      <span className="basis-full text-zinc-500 dark:text-zinc-500">
+        JSON and CSV round-trip losslessly back into this app.{" "}
+        {EXPORT_FORMAT_INFO.moxfield.lossyNote}
+      </span>
+    </section>
+  );
+}
+
 function ConflictBanner({ message }: { message: string }) {
   return (
     <div
@@ -399,6 +435,8 @@ export default async function CollectionPage({
       </div>
 
       <Controls query={query} view={view} />
+
+      <ExportLinks />
 
       {conflictId !== "" && (
         <ConflictBanner

@@ -1,4 +1,4 @@
-import type { Condition } from "@mtg/schemas";
+import { type Condition, deserializeTags } from "@mtg/schemas";
 
 /**
  * Archidekt's own export and import CSV formats aren't fully documented
@@ -23,6 +23,14 @@ const CANONICAL_FIELDS = [
   "foil",
   "condition",
   "language",
+  // Added by KAD-23. Without these three, this app's own CSV export would
+  // silently drop the fields Sprint 4's other two stories just added -
+  // which is exactly what "round-trip lossless" forbids. Third-party CSVs
+  // that lack the columns keep working: the map is alias-based and every
+  // field is already optional.
+  "binderLocation",
+  "isProxy",
+  "tags",
 ] as const;
 
 export type CanonicalField = (typeof CANONICAL_FIELDS)[number];
@@ -37,6 +45,9 @@ const COLUMN_ALIASES: Record<CanonicalField, string[]> = {
   foil: ["foil", "finish", "foil_quantity", "variant"],
   condition: ["condition"],
   language: ["language", "lang"],
+  binderLocation: ["binder location", "binder_location", "binder", "location", "storage"],
+  isProxy: ["proxy", "is proxy", "is_proxy"],
+  tags: ["tags", "tag"],
 };
 
 function normalizeHeader(header: string): string {
@@ -64,6 +75,9 @@ export interface ParsedArchidektRow {
   foilRaw: string;
   conditionRaw: string;
   language: string | null;
+  binderLocation: string;
+  isProxy: boolean;
+  tags: string[];
 }
 
 export function extractRow(
@@ -88,7 +102,23 @@ export function extractRow(
     foilRaw: get("foil"),
     conditionRaw: get("condition"),
     language: get("language") || null,
+    // Absent column and empty cell both mean "unset", which is `""` - the
+    // same value `collection_items` stores for it (see the table comment on
+    // why that column is NOT NULL rather than nullable).
+    binderLocation: get("binderLocation"),
+    isProxy: parseBoolean(get("isProxy")),
+    tags: deserializeTags(get("tags")),
   };
+}
+
+/**
+ * Truthy spellings a CSV might plausibly use for a flag. Anything else -
+ * including blank and an absent column - is false, matching how `foil` and
+ * `condition` degrade rather than blocking a row over a cosmetic field.
+ */
+export function parseBoolean(raw: string): boolean {
+  const value = raw.trim().toLowerCase();
+  return value === "true" || value === "1" || value === "yes" || value === "y";
 }
 
 /**

@@ -28,3 +28,62 @@ export function normalizeTag(raw: string): string | null {
   if (normalized === "" || normalized.length > MAX_TAG_LENGTH) return null;
   return normalized;
 }
+
+/**
+ * Separator for a tag list packed into a single CSV cell (KAD-23). Tags may
+ * contain spaces, so a space-separated list is out; `;` reads naturally and
+ * is rare inside a tag.
+ */
+const TAG_SEPARATOR = ";";
+
+/**
+ * Packs tags into one cell, backslash-escaping the separator and the escape
+ * character itself.
+ *
+ * The escaping is what makes the CSV export genuinely lossless rather than
+ * lossless-unless-you-used-a-semicolon. Tags are free-form: forbidding `;`
+ * to avoid the problem would be a real restriction on the user to save six
+ * lines of code here.
+ */
+export function serializeTags(tags: readonly string[]): string {
+  return tags.map((tag) => tag.replace(/\\/g, "\\\\").replace(/;/g, "\\;")).join(TAG_SEPARATOR);
+}
+
+/**
+ * The inverse of `serializeTags`. Every element is put back through
+ * `normalizeTag` and anything that doesn't survive is dropped, so a
+ * hand-edited or third-party CSV can't introduce a tag that the write path
+ * would never have created.
+ */
+export function deserializeTags(raw: string): string[] {
+  const tags: string[] = [];
+  let current = "";
+  let escaped = false;
+
+  for (const char of raw) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === TAG_SEPARATOR) {
+      tags.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  // A trailing lone backslash is malformed input; treating it as a literal
+  // beats dropping the tag it was attached to.
+  if (escaped) current += "\\";
+  tags.push(current);
+
+  const normalized = tags
+    .map((tag) => normalizeTag(tag))
+    .filter((tag): tag is string => tag !== null);
+  return [...new Set(normalized)].sort();
+}
