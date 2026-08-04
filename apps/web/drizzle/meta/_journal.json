@@ -57,6 +57,13 @@
       "when": 1785811613475,
       "tag": "0007_classy_kinsey_walden",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1785813893139,
+      "tag": "0008_black_solo",
+      "breakpoints": true
     }
   ]
 }

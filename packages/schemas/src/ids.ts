@@ -23,3 +23,9 @@ export type CollectorNumber = z.infer<typeof collectorNumberSchema>;
 
 export const collectionItemIdSchema = z.uuid().brand<"CollectionItemId">();
 export type CollectionItemId = z.infer<typeof collectionItemIdSchema>;
+
+export const deckIdSchema = z.uuid().brand<"DeckId">();
+export type DeckId = z.infer<typeof deckIdSchema>;
+
+export const deckCardIdSchema = z.uuid().brand<"DeckCardId">();
+export type DeckCardId = z.infer<typeof deckCardIdSchema>;

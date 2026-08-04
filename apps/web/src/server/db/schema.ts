@@ -1,4 +1,4 @@
-import type { Condition, Finish } from "@mtg/schemas";
+import type { Condition, DeckBoard, DeckFormat, Finish } from "@mtg/schemas";
 import {
   blob,
   index,
@@ -309,3 +309,111 @@ export const artworkHashes = sqliteTable("artwork_hashes", {
 
 export type ArtworkHashRow = typeof artworkHashes.$inferSelect;
 export type NewArtworkHashRow = typeof artworkHashes.$inferInsert;
+
+/**
+ * One row per deck (KAD-26).
+ *
+ * `format` is carried from the start even though only `commander` is
+ * validated in v1 - the AC asks for it, and it keeps the legality engine
+ * (KAD-30) dispatching on format rather than assuming Commander forever.
+ *
+ * `commanderCardId`/`partnerCardId` point at a *printing*, not an oracle
+ * card, because the deck editor shows a specific art and the export needs a
+ * specific set. Color identity is never stored here - it is derived on read
+ * from these two rows (KAD-28), so a card erratum arriving in a later bulk
+ * sync can't leave a stale identity baked into the deck. Same reasoning as
+ * legality in KAD-30.
+ */
+export const decks = sqliteTable("decks", {
+  id: text("id").primaryKey(), // DeckId
+  name: text("name").notNull(),
+  format: text("format").notNull().$type<DeckFormat>(),
+  description: text("description").notNull(),
+  commanderCardId: text("commander_card_id").references(() => cards.id),
+  partnerCardId: text("partner_card_id").references(() => cards.id),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export type DeckRow = typeof decks.$inferSelect;
+export type NewDeckRow = typeof decks.$inferInsert;
+
+/**
+ * One row per (deck, printing, board) (KAD-26).
+ *
+ * The unique index is what makes adding the same card to the same board
+ * twice increment quantity rather than create a duplicate row - the same
+ * design as the `collection_items` stack index, and for the same reason.
+ * `category` is deliberately *not* part of that key: re-categorising a card
+ * should move it, not fork it into two entries the user has to reconcile.
+ *
+ * `category` is NOT NULL with an empty-string default rather than nullable,
+ * because SQLite treats every NULL in a unique index as distinct - the exact
+ * trap documented on `collectionItems`. It isn't in this index today, but
+ * making it nullable would leave that landmine for whoever adds it.
+ */
+export const deckCards = sqliteTable(
+  "deck_cards",
+  {
+    id: text("id").primaryKey(), // DeckCardId
+    deckId: text("deck_id")
+      .notNull()
+      .references(() => decks.id, { onDelete: "cascade" }),
+    scryfallId: text("scryfall_id")
+      .notNull()
+      .references(() => cards.id),
+    board: text("board").notNull().$type<DeckBoard>(),
+    category: text("category").notNull(),
+    quantity: integer("quantity").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("deck_cards_entry_idx").on(table.deckId, table.scryfallId, table.board),
+    index("deck_cards_deck_id_idx").on(table.deckId),
+    index("deck_cards_scryfall_id_idx").on(table.scryfallId),
+  ],
+);
+
+export type DeckCardRow = typeof deckCards.$inferSelect;
+export type NewDeckCardRow = typeof deckCards.$inferInsert;
+
+/**
+ * Which physical copies a deck draws on (KAD-26, ERD 4).
+ *
+ * **Deliberately a stub this sprint.** Q2 in the working-agreements doc -
+ * "is deck allocation *reserving* physical copies, or advisory only?" - is
+ * an open product question resolved by ADR-004 (KAD-34) in Sprint 6, and the
+ * two answers want materially different tables: a reservation model needs a
+ * held-quantity column plus a constraint preventing over-allocation across
+ * decks, an advisory model needs neither and tolerates deliberate overlap.
+ *
+ * So this carries only the shape both readings share, and *no* behavior:
+ * nothing in Sprint 5 writes to it. KAD-33/KAD-34 add whatever their chosen
+ * semantics needs. Do not infer from this table's existence that Q2 has been
+ * answered.
+ */
+export const deckAllocations = sqliteTable(
+  "deck_allocations",
+  {
+    id: text("id").primaryKey(),
+    deckId: text("deck_id")
+      .notNull()
+      .references(() => decks.id, { onDelete: "cascade" }),
+    collectionItemId: text("collection_item_id")
+      .notNull()
+      .references(() => collectionItems.id, { onDelete: "cascade" }),
+    quantity: integer("quantity").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("deck_allocations_deck_id_idx").on(table.deckId),
+    // The cross-deck conflict query (KAD-33) reads this direction: given a
+    // stack, who else has claimed it.
+    index("deck_allocations_collection_item_id_idx").on(table.collectionItemId),
+  ],
+);
+
+export type DeckAllocationRow = typeof deckAllocations.$inferSelect;
+export type NewDeckAllocationRow = typeof deckAllocations.$inferInsert;
