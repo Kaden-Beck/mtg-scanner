@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "capture": "Pixel 8, handheld, ~30cm, mixed backgrounds. Shot 2026-08.",
+  "entries": [
+    {
+      "image": "images/001.jpg",
+      "scryfallId": "6b3f2a4d-5c1e-4a8b-9d2f-7e0c3b5a1d84",
+      "oracleId": "0d1b1cb6-e5a1-4b6f-9a0d-2f3c4b5a6d7e",
+      "name": "Sol Ring",
+      "setCode": "c19",
+      "collectorNumber": "241",
+      "condition": "NM",
+      "finish": "nonfoil",
+      "sleeve": "none",
+      "frame": "2015",
+      "lighting": "bright",
+      "sharedArt": true,
+      "notes": "Shares its illustration with the C21 and C22 printings - see 002 and 003."
+    },
+    {
+      "image": "images/002.jpg",
+      "scryfallId": "2c9e7f14-8a3b-4d6e-b1f0-9c4a2e8d5b73",
+      "oracleId": "0d1b1cb6-e5a1-4b6f-9a0d-2f3c4b5a6d7e",
+      "name": "Sol Ring",
+      "setCode": "c21",
+      "collectorNumber": "268",
+      "condition": "LP",
+      "finish": "nonfoil",
+      "sleeve": "clear",
+      "frame": "2015",
+      "lighting": "indoor",
+      "sharedArt": true,
+      "notes": "Same artwork as 001. pHash cannot separate these two - only the collector number can, so this pair is what proves T2 escalation works."
+    },
+    {
+      "image": "images/003.jpg",
+      "scryfallId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "oracleId": "1e2c3d4f-6b7a-4c8d-9e0f-3a4b5c6d7e8f",
+      "name": "Llanowar Elves",
+      "setCode": "dom",
+      "collectorNumber": "168",
+      "condition": "MP",
+      "finish": "foil",
+      "sleeve": "opaque-back",
+      "frame": "2015",
+      "lighting": "harsh-glare",
+      "sharedArt": false,
+      "notes": "Deliberate worst case: foil under a desk lamp, glare across the upper third of the art."
+    }
+  ]
+}

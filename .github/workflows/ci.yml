@@ -36,6 +36,20 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # KAD-36. Gated on the manifest existing rather than skipped by hand:
+      # the corpus is photographed over time, and this turns itself on the
+      # moment `labels.json` lands instead of needing a CI edit nobody will
+      # remember to make. `corpus:validate` exits non-zero on any coverage
+      # problem, so an under-stratified corpus fails here rather than
+      # quietly producing meaningless accuracy numbers later.
+      - name: Validate recognition corpus
+        run: |
+          if [ -f tests/corpus/labels.json ]; then
+            pnpm corpus:validate
+          else
+            echo "No tests/corpus/labels.json yet (KAD-36 in progress) - skipping."
+          fi
+
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
@@ -43,6 +57,48 @@ jobs:
       # through. They have to actually run.
       - name: E2E
         run: pnpm test:e2e
+
+  # KAD-37: recognition accuracy must not regress more than 1pp against
+  # tests/corpus/baseline.json.
+  #
+  # Unlike the perf job below this one IS gated - accuracy is deterministic
+  # given the same corpus and the same code, so a drop is a real regression
+  # rather than a busy runner. Latency is reported by the harness but never
+  # gated, for exactly the perf job's reason.
+  #
+  # Inert until two things exist: the corpus (KAD-36) and a recognizer to
+  # measure (T1 lands in KAD-40). Both conditions are checked here rather
+  # than in a comment so the job turns itself on rather than waiting for
+  # someone to remember it.
+  recognition-accuracy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Accuracy gate
+        run: |
+          if [ ! -f tests/corpus/baseline.json ]; then
+            echo "No tests/corpus/baseline.json yet - nothing to regress against."
+            echo "Record one once a recognizer exists (KAD-40)."
+            exit 0
+          fi
+          if [ ! -d tests/corpus/images ]; then
+            echo "::warning::baseline.json exists but tests/corpus/images is absent."
+            echo "The corpus images are gitignored by default - see tests/corpus/README.md"
+            echo "for the downscale-and-commit option that makes this gate runnable in CI."
+            exit 0
+          fi
+          pnpm corpus:gate
 
   # NFR-1 (KAD-20): p95 <= 200ms at 110k printings / 20k owned stacks.
   # Tracked, not gated - `continue-on-error` is deliberate. Wall-clock

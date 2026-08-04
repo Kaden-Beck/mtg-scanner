@@ -1,0 +1,7 @@
+# The photographs themselves (KAD-36). ~1GB at full phone resolution, which
+# does not belong in a repo that is otherwise a few MB of TypeScript.
+#
+# See README.md - if you want the KAD-37 gate to run on GitHub-hosted CI,
+# the answer is to commit *downscaled* images (1200px long edge, ~60-100MB
+# total) and delete this rule.
+images/

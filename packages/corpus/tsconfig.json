@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    // The validate CLI runs under `node --experimental-strip-types`, which
+    // needs explicit .ts extensions on relative imports (see CLAUDE.md).
+    "allowImportingTsExtensions": true,
+    "declaration": false,
+    // Explicit rather than relying on automatic @types discovery, which does
+    // not reach this package from the workspace root.
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

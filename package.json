@@ -16,7 +16,9 @@
     "typecheck:tsgo": "pnpm -r --if-present typecheck:tsgo",
     "test": "vitest run --project node --project jsdom",
     "test:e2e": "playwright test",
-    "test:perf": "vitest run --project perf"
+    "test:perf": "vitest run --project perf",
+    "corpus:validate": "node --experimental-strip-types packages/corpus/src/validate-cli.ts",
+    "corpus:gate": "node --experimental-strip-types packages/corpus/src/gate-cli.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",

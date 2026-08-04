@@ -133,6 +133,22 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  packages/corpus:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.13.3
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260707.2
+        version: 7.0.0-dev.20260707.2
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   packages/phash:
     devDependencies:
       '@typescript/native-preview':
