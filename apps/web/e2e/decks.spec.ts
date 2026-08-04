@@ -209,7 +209,9 @@ test("reports the specific card and rule for each violation (KAD-31 AC2)", async
   await expect(page.getByText(`${BANNED} is banned in Commander.`)).toBeVisible();
 
   await expect(page.getByRole("heading", { name: /Color identity/ })).toBeVisible();
-  await expect(page.getByText(new RegExp(`${OFF_IDENTITY}.*outside the commander's G`))).toBeVisible();
+  await expect(
+    page.getByText(new RegExp(`${OFF_IDENTITY}.*outside the commander's G`)),
+  ).toBeVisible();
 });
 
 test("exempts basic lands from the singleton rule", async ({ page }) => {
@@ -255,9 +257,9 @@ test("removes a card from the deck", async ({ page }) => {
 
   await expect(page.getByText(`1× ${OFF_IDENTITY}`)).toHaveCount(0);
   // ...and the color-identity violation it caused goes with it.
-  await expect(
-    page.getByText(new RegExp(`${OFF_IDENTITY}.*outside the commander's`)),
-  ).toHaveCount(0);
+  await expect(page.getByText(new RegExp(`${OFF_IDENTITY}.*outside the commander's`))).toHaveCount(
+    0,
+  );
 });
 
 test("is readable on a phone viewport without horizontal scrolling", async ({ page }) => {

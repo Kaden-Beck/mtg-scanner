@@ -35,9 +35,7 @@ export function LegalityReport({ result }: { result: LegalityResult }) {
         <div className="rounded border border-neutral-800 bg-neutral-950 p-3" key={group.rule}>
           <h3 className="text-sm font-semibold text-neutral-100">
             {group.label}
-            <span className="ml-2 font-normal text-neutral-400">
-              ({group.violations.length})
-            </span>
+            <span className="ml-2 font-normal text-neutral-400">({group.violations.length})</span>
           </h3>
           <p className="mt-1 text-xs text-neutral-400">{group.remedy}</p>
           <ul className="mt-2 flex flex-col gap-1">

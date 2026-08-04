@@ -82,9 +82,7 @@ describe("createDeck", () => {
     const { createDeckRequestSchema } = await import("@mtg/schemas");
 
     expect(() =>
-      createDeck(
-        createDeckRequestSchema.parse({ name: "Ghost", commanderCardId: missingCardId }),
-      ),
+      createDeck(createDeckRequestSchema.parse({ name: "Ghost", commanderCardId: missingCardId })),
     ).toThrow(CardNotFoundError);
   });
 });

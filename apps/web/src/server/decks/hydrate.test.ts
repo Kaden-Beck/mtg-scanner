@@ -124,7 +124,10 @@ describe("deckColorIdentity", () => {
     );
     expect(deckColorIdentity(deck)).toEqual(["G"]);
 
-    db.update(cards).set({ colorIdentity: ["G", "U"] }).where(eq(cards.id, soloId)).run();
+    db.update(cards)
+      .set({ colorIdentity: ["G", "U"] })
+      .where(eq(cards.id, soloId))
+      .run();
 
     expect(deckColorIdentity(deck)).toEqual(["U", "G"]);
   });
@@ -164,7 +167,9 @@ describe("validateDeckById", () => {
     const { cards } = await import("../db/schema");
     const { eq } = await import("drizzle-orm");
 
-    db.update(cards).set({ legalities: { commander: "legal" } }).run();
+    db.update(cards)
+      .set({ legalities: { commander: "legal" } })
+      .run();
 
     const deck = createDeck(
       createDeckRequestSchema.parse({ name: "Banlist", commanderCardId: soloId }),
@@ -177,7 +182,10 @@ describe("validateDeckById", () => {
     expect(validateDeckById(deck.id)?.violations.some((v) => v.rule === "banlist")).toBe(false);
 
     // A sync lands, and Tana is now banned.
-    db.update(cards).set({ legalities: { commander: "banned" } }).where(eq(cards.id, tanaId)).run();
+    db.update(cards)
+      .set({ legalities: { commander: "banned" } })
+      .where(eq(cards.id, tanaId))
+      .run();
 
     const after = validateDeckById(deck.id);
     const banlist = after?.violations.filter((v) => v.rule === "banlist") ?? [];

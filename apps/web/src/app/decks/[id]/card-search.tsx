@@ -81,10 +81,12 @@ export function CardSearch({ categories }: { categories: string[] }) {
       />
 
       {selected ? (
-        // An explicit accessible name rather than relying on the visible
-        // text: the label is split across spans, so a text match can't see
-        // it as one string - and naming it is the better a11y outcome too.
-        <p aria-label="Selected card" className="text-sm text-neutral-300">
+        // `role="status"` rather than a bare <p>: the label is split across
+        // spans so a text match can't see it as one string, and `aria-label`
+        // is only valid on a role that supports naming - a paragraph is not
+        // one. A live region is also the right semantics, since this
+        // announces the selection changing.
+        <p aria-label="Selected card" className="text-sm text-neutral-300" role="status">
           Selected: <span className="font-medium text-neutral-100">{selected.name}</span>{" "}
           <span className="text-neutral-500">
             ({selected.setCode.toUpperCase()} {selected.collectorNumber})
@@ -137,7 +139,8 @@ export function CardSearch({ categories }: { categories: string[] }) {
       ) : null}
 
       {preview?.imageUri ? (
-        // eslint-disable-next-line @next/next/no-img-element -- Scryfall CDN, same call as the collection page
+        // biome-ignore lint/performance/noImgElement: Scryfall CDN images, same call as the collection page
+        // eslint-disable-next-line @next/next/no-img-element -- same
         <img
           alt={preview.name}
           className="w-40 rounded"

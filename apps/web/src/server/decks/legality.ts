@@ -1,5 +1,10 @@
 import type { DeckFormat } from "@mtg/schemas";
-import { type Color, deriveColorIdentity, type IdentityCard, offendingColors } from "./color-identity";
+import {
+  type Color,
+  deriveColorIdentity,
+  type IdentityCard,
+  offendingColors,
+} from "./color-identity";
 
 /**
  * Commander legality rules engine (KAD-30).

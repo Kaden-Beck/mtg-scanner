@@ -131,10 +131,7 @@ function findDeckCardEntry(
  * being ignored: the user just told us where this card belongs, and silently
  * keeping the old category would make the category picker look broken.
  */
-export function addOrMergeDeckCard(
-  deckId: string,
-  request: CreateDeckCardRequest,
-): DeckCardRow {
+export function addOrMergeDeckCard(deckId: string, request: CreateDeckCardRequest): DeckCardRow {
   if (!getDeck(deckId)) throw new DeckNotFoundError(deckId);
   requireCard(request.scryfallId);
 

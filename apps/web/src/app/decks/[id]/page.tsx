@@ -1,4 +1,5 @@
 import { DECK_BOARDS, deckBoardLabel, deckFormatLabel } from "@mtg/schemas";
+import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
@@ -17,8 +18,6 @@ import {
 } from "../deck-view";
 import { LegalityReport } from "../legality-report";
 import { CardSearch } from "./card-search";
-
-import { eq } from "drizzle-orm";
 
 function loadEntries(deckId: string): DeckEntryView[] {
   const rows = db
@@ -90,10 +89,7 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
                   {group.entries.map(({ entry, card }) => {
                     const image = cardImageUrl(card, "normal");
                     return (
-                      <li
-                        className="flex flex-wrap items-center gap-2 py-1 text-sm"
-                        key={entry.id}
-                      >
+                      <li className="flex flex-wrap items-center gap-2 py-1 text-sm" key={entry.id}>
                         {/* `title` gives a tap/hover preview target on the
                             card name even where the image is absent. */}
                         <span className="min-w-0 flex-1 text-neutral-100" title={card.typeLine}>
@@ -101,7 +97,8 @@ export default async function DeckPage({ params }: { params: Promise<{ id: strin
                         </span>
 
                         {image ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- Scryfall CDN, same call as the collection page
+                          // biome-ignore lint/performance/noImgElement: Scryfall CDN images, same call as the collection page
+                          // eslint-disable-next-line @next/next/no-img-element -- same
                           <img
                             alt={card.name}
                             className="h-16 w-auto rounded"

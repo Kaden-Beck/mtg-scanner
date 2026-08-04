@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { LEGALITY_RULES, type LegalityResult, type LegalityViolation } from "@/server/decks/legality";
+import {
+  LEGALITY_RULES,
+  type LegalityResult,
+  type LegalityViolation,
+} from "@/server/decks/legality";
 import {
   groupViolations,
   ruleLabel,
@@ -124,7 +128,10 @@ describe("verdictSummary", () => {
   it("counts distinct rules, not violations", () => {
     const summary = verdictSummary(
       result({
-        violations: [violation({ cardName: "Sol Ring" }), violation({ cardName: "Lightning Bolt" })],
+        violations: [
+          violation({ cardName: "Sol Ring" }),
+          violation({ cardName: "Lightning Bolt" }),
+        ],
       }),
     );
     expect(summary).toContain("2 problems");

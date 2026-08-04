@@ -87,12 +87,7 @@ describe("entriesForBoard / boardCount", () => {
 
 describe("knownCategories", () => {
   it("lists distinct categories alphabetically and omits uncategorized", () => {
-    const entries = [
-      view("A", "removal"),
-      view("B", "ramp"),
-      view("C", "ramp"),
-      view("D", ""),
-    ];
+    const entries = [view("A", "removal"), view("B", "ramp"), view("C", "ramp"), view("D", "")];
     expect(knownCategories(entries)).toEqual(["ramp", "removal"]);
   });
 });

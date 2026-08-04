@@ -1,6 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "../db/client";
-import { type CardRow, cards, deckCards, type DeckRow, decks } from "../db/schema";
+import { type CardRow, cards, type DeckRow, deckCards, decks } from "../db/schema";
 import { type Color, deriveColorIdentity } from "./color-identity";
 import { type DeckForValidation, type LegalityResult, validateDeck } from "./legality";
 

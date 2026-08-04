@@ -315,52 +315,37 @@
       "indexes": {
         "cards_oracle_id_idx": {
           "name": "cards_oracle_id_idx",
-          "columns": [
-            "oracle_id"
-          ],
+          "columns": ["oracle_id"],
           "isUnique": false
         },
         "cards_name_idx": {
           "name": "cards_name_idx",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": false
         },
         "cards_set_collector_idx": {
           "name": "cards_set_collector_idx",
-          "columns": [
-            "set_code",
-            "collector_number"
-          ],
+          "columns": ["set_code", "collector_number"],
           "isUnique": false
         },
         "cards_set_code_idx": {
           "name": "cards_set_code_idx",
-          "columns": [
-            "set_code"
-          ],
+          "columns": ["set_code"],
           "isUnique": false
         },
         "cards_rarity_idx": {
           "name": "cards_rarity_idx",
-          "columns": [
-            "rarity"
-          ],
+          "columns": ["rarity"],
           "isUnique": false
         },
         "cards_cmc_idx": {
           "name": "cards_cmc_idx",
-          "columns": [
-            "cmc"
-          ],
+          "columns": ["cmc"],
           "isUnique": false
         },
         "cards_illustration_id_idx": {
           "name": "cards_illustration_id_idx",
-          "columns": [
-            "illustration_id"
-          ],
+          "columns": ["illustration_id"],
           "isUnique": false
         }
       },
@@ -397,9 +382,7 @@
       "indexes": {
         "collection_item_tags_tag_idx": {
           "name": "collection_item_tags_tag_idx",
-          "columns": [
-            "tag"
-          ],
+          "columns": ["tag"],
           "isUnique": false
         }
       },
@@ -408,22 +391,15 @@
           "name": "collection_item_tags_collection_item_id_collection_items_id_fk",
           "tableFrom": "collection_item_tags",
           "tableTo": "collection_items",
-          "columnsFrom": [
-            "collection_item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["collection_item_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "collection_item_tags_collection_item_id_tag_pk": {
-          "columns": [
-            "collection_item_id",
-            "tag"
-          ],
+          "columns": ["collection_item_id", "tag"],
           "name": "collection_item_tags_collection_item_id_tag_pk"
         }
       },
@@ -519,9 +495,7 @@
         },
         "collection_items_scryfall_id_idx": {
           "name": "collection_items_scryfall_id_idx",
-          "columns": [
-            "scryfall_id"
-          ],
+          "columns": ["scryfall_id"],
           "isUnique": false
         }
       },
@@ -530,12 +504,8 @@
           "name": "collection_items_scryfall_id_cards_id_fk",
           "tableFrom": "collection_items",
           "tableTo": "cards",
-          "columnsFrom": [
-            "scryfall_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scryfall_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -593,16 +563,12 @@
       "indexes": {
         "deck_allocations_deck_id_idx": {
           "name": "deck_allocations_deck_id_idx",
-          "columns": [
-            "deck_id"
-          ],
+          "columns": ["deck_id"],
           "isUnique": false
         },
         "deck_allocations_collection_item_id_idx": {
           "name": "deck_allocations_collection_item_id_idx",
-          "columns": [
-            "collection_item_id"
-          ],
+          "columns": ["collection_item_id"],
           "isUnique": false
         }
       },
@@ -611,12 +577,8 @@
           "name": "deck_allocations_deck_id_decks_id_fk",
           "tableFrom": "deck_allocations",
           "tableTo": "decks",
-          "columnsFrom": [
-            "deck_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["deck_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -624,12 +586,8 @@
           "name": "deck_allocations_collection_item_id_collection_items_id_fk",
           "tableFrom": "deck_allocations",
           "tableTo": "collection_items",
-          "columnsFrom": [
-            "collection_item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["collection_item_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -701,25 +659,17 @@
       "indexes": {
         "deck_cards_entry_idx": {
           "name": "deck_cards_entry_idx",
-          "columns": [
-            "deck_id",
-            "scryfall_id",
-            "board"
-          ],
+          "columns": ["deck_id", "scryfall_id", "board"],
           "isUnique": true
         },
         "deck_cards_deck_id_idx": {
           "name": "deck_cards_deck_id_idx",
-          "columns": [
-            "deck_id"
-          ],
+          "columns": ["deck_id"],
           "isUnique": false
         },
         "deck_cards_scryfall_id_idx": {
           "name": "deck_cards_scryfall_id_idx",
-          "columns": [
-            "scryfall_id"
-          ],
+          "columns": ["scryfall_id"],
           "isUnique": false
         }
       },
@@ -728,12 +678,8 @@
           "name": "deck_cards_deck_id_decks_id_fk",
           "tableFrom": "deck_cards",
           "tableTo": "decks",
-          "columnsFrom": [
-            "deck_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["deck_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -741,12 +687,8 @@
           "name": "deck_cards_scryfall_id_cards_id_fk",
           "tableFrom": "deck_cards",
           "tableTo": "cards",
-          "columnsFrom": [
-            "scryfall_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scryfall_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -821,12 +763,8 @@
           "name": "decks_commander_card_id_cards_id_fk",
           "tableFrom": "decks",
           "tableTo": "cards",
-          "columnsFrom": [
-            "commander_card_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["commander_card_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -834,12 +772,8 @@
           "name": "decks_partner_card_id_cards_id_fk",
           "tableFrom": "decks",
           "tableTo": "cards",
-          "columnsFrom": [
-            "partner_card_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["partner_card_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -883,9 +817,7 @@
       "indexes": {
         "import_batch_items_batch_id_idx": {
           "name": "import_batch_items_batch_id_idx",
-          "columns": [
-            "batch_id"
-          ],
+          "columns": ["batch_id"],
           "isUnique": false
         }
       },
@@ -894,12 +826,8 @@
           "name": "import_batch_items_batch_id_import_batches_id_fk",
           "tableFrom": "import_batch_items",
           "tableTo": "import_batches",
-          "columnsFrom": [
-            "batch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["batch_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -907,12 +835,8 @@
           "name": "import_batch_items_collection_item_id_collection_items_id_fk",
           "tableFrom": "import_batch_items",
           "tableTo": "collection_items",
-          "columnsFrom": [
-            "collection_item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["collection_item_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1005,9 +929,7 @@
       "indexes": {
         "import_batches_file_hash_idx": {
           "name": "import_batches_file_hash_idx",
-          "columns": [
-            "file_hash"
-          ],
+          "columns": ["file_hash"],
           "isUnique": false
         }
       },
@@ -1079,9 +1001,7 @@
       "indexes": {
         "import_reconciliation_rows_batch_id_idx": {
           "name": "import_reconciliation_rows_batch_id_idx",
-          "columns": [
-            "batch_id"
-          ],
+          "columns": ["batch_id"],
           "isUnique": false
         }
       },
@@ -1090,12 +1010,8 @@
           "name": "import_reconciliation_rows_batch_id_import_batches_id_fk",
           "tableFrom": "import_reconciliation_rows",
           "tableTo": "import_batches",
-          "columnsFrom": [
-            "batch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["batch_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
