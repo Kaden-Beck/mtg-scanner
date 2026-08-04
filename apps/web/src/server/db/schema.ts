@@ -381,17 +381,16 @@ export type NewDeckCardRow = typeof deckCards.$inferInsert;
 /**
  * Which physical copies a deck draws on (KAD-26, ERD 4).
  *
- * **Deliberately a stub this sprint.** Q2 in the working-agreements doc -
- * "is deck allocation *reserving* physical copies, or advisory only?" - is
- * an open product question resolved by ADR-004 (KAD-34) in Sprint 6, and the
- * two answers want materially different tables: a reservation model needs a
- * held-quantity column plus a constraint preventing over-allocation across
- * decks, an advisory model needs neither and tolerates deliberate overlap.
+ * **Allocation is advisory, not reservation** - Q2, resolved by ADR-004
+ * (KAD-34). Over-allocation across decks is an expected state, not
+ * corruption: there is deliberately no constraint, trigger or `CHECK`
+ * summing `quantity` against `collectionItems.quantity`. Four decks may all
+ * claim the user's one Sol Ring, because in paper they do.
  *
- * So this carries only the shape both readings share, and *no* behavior:
- * nothing in Sprint 5 writes to it. KAD-33/KAD-34 add whatever their chosen
- * semantics needs. Do not infer from this table's existence that Q2 has been
- * answered.
+ * Conflict is therefore detected at *read* time (KAD-33) via the
+ * `collection_item_id` index below, and the UI is the only thing that
+ * surfaces it. If you are here to add an over-allocation constraint, read
+ * ADR-004 first - that is a reversal of the decision, not a missing guard.
  */
 export const deckAllocations = sqliteTable(
   "deck_allocations",
