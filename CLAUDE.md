@@ -243,6 +243,13 @@ up --build`), not just `pnpm test`.
 - One commit per story, referencing the Linear issue id in the subject line.
   Mark the issue Done and comment with the commit SHA(s) as each lands —
   don't batch this to the end.
+- **Every deliberate descope, known gap, or deferred cleanup gets a Linear
+  ticket with the `Tech Debt` label — not just a commit message and a code
+  comment.** A compromise that only exists in prose is invisible at
+  planning time. The ticket should say what was left undone, *why* it was
+  out of scope, what breaks because of it, and where in the code to look.
+  If a test documents the gap (as `color-identity.test.ts` does for
+  KAD-58), name that test in the ticket so closing it is obvious.
 - Sprint 1 (R1 · Foundation, all 6 stories) shipped via PR #1, merged
   2026-08-02.
 - Sprint 2 (R1 · Foundation, all 6 stories: KAD-12, KAD-10, KAD-11, KAD-13,
