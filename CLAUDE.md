@@ -210,10 +210,15 @@ up --build`), not just `pnpm test`.
 ## Process
 
 - Git identity and `gh` auth were not configured at the start of this repo
-  — both are now set up. The `gh` OAuth token currently **lacks the
-  `workflow` scope**, so it can't push changes to `.github/workflows/*`.
-  Run `gh auth refresh -s workflow` (device-code flow) to fix; until then,
-  workflow file changes need to be pushed some other way or deferred.
+  — both are now set up. The `gh` OAuth token lacks the `workflow` scope,
+  but **this does not block anything**: `origin` is an SSH remote
+  (`git@github.com:...`) and GitHub only enforces the `workflow`-scope
+  check on pushes authenticated by an OAuth token, not by an SSH key. An
+  earlier note here claimed workflow files couldn't be pushed; that was
+  wrong, and `.github/workflows/ci.yml` had in fact been on the remote
+  since KAD-20. If you ever switch the remote to HTTPS, the restriction
+  becomes real — `gh auth refresh -s workflow` (device-code flow) is the
+  fix then.
 - One commit per story, referencing the Linear issue id in the subject line.
   Mark the issue Done and comment with the commit SHA(s) as each lands —
   don't batch this to the end.
@@ -243,6 +248,6 @@ up --build`), not just `pnpm test`.
   verified on a 40-artwork live slice, but the full ~47.4k run (roughly an
   hour) has not been triggered. Sprint 7's scanner needs it; it is safe to
   interrupt and resumes where it stopped, so it can be run whenever.
-- **CI now exists** (`.github/workflows/ci.yml`, added in KAD-20) — the
-  repo had no `.github/` at all before that. It is committed but **has
-  never been pushed**, because of the missing `workflow` scope above.
+- **CI exists and runs** (`.github/workflows/ci.yml`, added in KAD-20) —
+  the repo had no `.github/` at all before that. It has been running on
+  every push to `main` since KAD-20 landed; check with `gh run list`.
