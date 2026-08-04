@@ -66,7 +66,8 @@ up --build`), not just `pnpm test`.
   `configs.flat["recommended-latest"]`**, not `configs["recommended-latest"]`
   (that's the legacy eslintrc-format export and errors under flat config).
 - **`node --experimental-strip-types` needs explicit `.ts` extensions on
-  relative imports.** Unlike `tsc`/Vitest's `moduleResolution: "bundler"`,
+  relative imports — throughout the whole reachable import graph, not just
+  the entry file.** Unlike `tsc`/Vitest's `moduleResolution: "bundler"`,
   Node's ESM loader doesn't do TS-style extensionless resolution —
   `import { x } from "../y"` fails with `ERR_MODULE_NOT_FOUND` at runtime
   even though it typechecks fine. Only bites standalone scripts that have
@@ -74,7 +75,18 @@ up --build`), not just `pnpm test`.
   imports). Fix is `allowImportingTsExtensions: true` in tsconfig (safe
   when `noEmit` is already true) plus the `.ts` suffix in the import
   itself, not duplicating the logic to dodge it. (`apps/web/src/server/db/
-  restore-cli.ts`)
+  restore-cli.ts`) **Sharpened in KAD-37:** `gate-cli.ts` had correct `.ts`
+  extensions on all four of its own imports and still died on startup,
+  because the modules it imported used extensionless specifiers between
+  *themselves*. If a package has a CLI entry point, every relative import in
+  that package needs the suffix. Both `tsc` and Vitest stay green either
+  way, so running the CLI is the only thing that tells you.
+- **A new `packages/*` needs `"types": ["node"]` in its tsconfig to see
+  `process` and `node:*`.** Automatic `@types` discovery does not reach a
+  workspace package from the root, so `@types/node` in `devDependencies` is
+  necessary but not sufficient — the symptom is `Cannot find name 'process'`
+  alongside a perfectly present `node_modules/@types/node`.
+  (`packages/corpus/tsconfig.json`)
 - **`next/server`'s `connection()` throws outside a real Next request
   scope**, so a route handler that calls it (to opt out of Cache Components
   prerendering, same as the `import.meta.dirname` entry above) can't be
@@ -125,6 +137,18 @@ up --build`), not just `pnpm test`.
   when the page has exactly one alert of its own. Give the app's alert an
   explicit `aria-label` and select by name; this is also the better a11y
   outcome, since an unnamed live region is worse for screen readers too.
+- **`aria-label` only works on elements whose role supports naming**, which
+  a bare `<span>` and `<p>` do not — Biome's `useAriaPropsSupportedByRole`
+  catches it, `getByLabel` finds it anyway, and assistive tech ignores it.
+  Three shapes solve it, and which one is right depends on the element's
+  actual job: a live region that announces gets `role="alert"`/`"status"`
+  (the legality report, the card-search selection); standing information
+  gets wrapped in a named `<section>`, i.e. a `region` landmark (KAD-32's
+  ownership summary); and an inline marker gets *no* `aria-label` at all —
+  put the short visual text in `aria-hidden` and the full sentence in a
+  `sr-only` sibling (KAD-32's ownership badge, KAD-33's conflict badge).
+  The third is usually the right answer for badges, since the terse visual
+  form ("2/4", "Also in Yeva") is meaningless read aloud anyway.
 - **`next build` runs `migrate()` concurrently in every page-data worker.**
   `db/client.ts` migrates at module evaluation, and Next collects page data
   across ~12 worker *processes* (so the `globalThis` connection cache
@@ -176,7 +200,25 @@ up --build`), not just `pnpm test`.
 - **A direct `INSERT INTO cards` does not reach `cards_fts`.** The FTS table
   is populated by the ingest (KAD-10), so an e2e fixture seeded straight
   into SQLite is invisible to anything that searches - the deck typeahead
-  found nothing until the seed inserted into `cards_fts` explicitly.
+  found nothing until the seed inserted into `cards_fts` explicitly. Hit
+  again in KAD-35 in a brand-new spec file: this is a per-spec obligation,
+  not something the first fix made global, so any new spec that seeds cards
+  and then searches needs its own `insertFts`.
+- **Two e2e specs sharing one fixture row makes them order-dependent.**
+  KAD-35's "owned-only still offers a claimed card" test created a competing
+  deck against the same `collection_items` stack KAD-33's conflict test
+  asserted on, so the conflict test's exact list of competing deck names
+  gained an extra entry and failed - but only once both specs existed, and
+  only in that order. Fixtures that a test *mutates or claims* need to be
+  per-test, not per-file; the shared ones should be read-only. Running the
+  suite twice back to back is the cheap check, since the fixture GC window
+  is an hour.
+- **A float subtraction is not safe against a threshold.** KAD-37's gate has
+  to pass a drop of *exactly* one percentage point, and `0.95 - 0.94` is
+  `0.010000000000000009`, which is greater than `0.01`. Anything comparing a
+  computed delta against a tolerance needs to round to a fixed resolution
+  first. Same family as the `Math.cos` note above: the bug is invisible
+  until the boundary case is the one that matters.
 - **`packages/phash` must be the only implementation of resize/grayscale/
   DCT/binarization.** `sharp` (KAD-24) is used for *decode only*, in
   `server/ingest/decode-image.ts`. If the index were built with libvips'
@@ -281,11 +323,42 @@ up --build`), not just `pnpm test`.
   Partner with / Friends forever but **not** Backgrounds or Doctor's
   companion, since neither is a keyword lookup on both cards. A test
   documents that gap so it fails loudly when someone closes it.
-- **`deck_allocations` exists but is a stub with no behavior.** Q2
-  (allocation as reservation vs advisory) is resolved by ADR-004 / KAD-34 in
-  Sprint 6, and the two answers want different tables, so KAD-26 shipped
-  only the shape both share. Do not read the table's existence as Q2 having
-  been answered.
+- Sprint 6 (R2 · Brewing, KAD-32 → KAD-37) shipped 2026-08-04 via direct
+  commits to `main`. 17/17 committed points landed. **KAD-36 is the one
+  story not fully closed and cannot be**: it needs 300–500 real cards
+  photographed, which is a human task. Everything around the photos (the
+  manifest schema, validator, capture protocol, and the KAD-37 harness that
+  consumes them) shipped; the ticket is In Progress with the handoff on it.
+- **Q2 is answered: allocation is advisory** (ADR-004, KAD-34). Over-
+  allocation across decks is an expected state, not corruption - there is
+  deliberately no constraint summing `deck_allocations.quantity` against
+  `collection_items.quantity`. Conflict is detected at *read* time (KAD-33).
+  If you arrive intending to add an over-allocation constraint, that is a
+  reversal of ADR-004, not a missing guard.
+- **Ownership matching is oracle-level, everywhere.** KAD-32's badge,
+  KAD-33's allocation and KAD-35's owned-only filter all match on
+  `cards.oracle_id`, not `scryfall_id`: in paper any printing of Sol Ring
+  plays, so printing-level matching reports cards as unowned while a copy
+  sits in the box. The exact printing is tracked alongside so the UI can say
+  "owned, different art". Cards with a null `oracle_id` fall back to
+  printing-only matching.
+- **`deck_allocations` is written only on deck-card mutation** (KAD-33), so a
+  deck untouched since Sprint 6 has no rows and a collection edit can leave
+  the plan stale in the "user bought another copy" direction.
+  `syncAllDeckAllocations()` fixes both in one call and has no caller yet -
+  tracked as KAD-61.
+- **The recognition accuracy gate is wired but inert.** `pnpm corpus:gate`
+  exits 0 explaining that no recognizer is registered; `recognizer-registry
+  .ts` returns null until T1 lands (KAD-40), and that is the one function to
+  edit. It is deliberately not a stub returning plausible candidates - a
+  fake would let a baseline be recorded against nothing. CI runs both the
+  corpus validation and the gate behind existence checks so they switch
+  themselves on rather than needing a workflow edit.
+- **Corpus images are gitignored and that is an open decision**
+  (`tests/corpus/.gitignore`). Full-resolution photos are ~1GB; committing
+  downscaled copies (1200px, ~60-100MB) is what would let the KAD-37 gate
+  run on GitHub-hosted CI, and costs nothing in accuracy since pHash reduces
+  to a 32x32 DCT anyway. Decide before the shoot, not after.
 - **The dev database now holds a real corpus** - the KAD-8 ingest was run
   during Sprint 5 and `cards` has ~104.7k rows (it had been sitting at 70,
   which made the deck editor undemoable). The ingest takes ~2 minutes.
