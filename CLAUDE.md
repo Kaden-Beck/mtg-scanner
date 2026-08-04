@@ -156,6 +156,15 @@ up --build`), not just `pnpm test`.
   invalidate it.** Raising `apps/web` to ES2022 kept reporting the old
   ES2017 BigInt errors until the tsbuildinfo was deleted. If a tsconfig
   change appears to have no effect, delete the cache before believing it.
+- **`pnpm lint` is not the lint gate — CI runs `pnpm lint:biome` too.**
+  ESLint and Biome are separate steps in `ci.yml` with almost disjoint rule
+  sets, so a clean `pnpm lint` says nothing about whether the build passes.
+  Sprint 5 pushed red twice before this was noticed. Run **both**, plus
+  `pnpm typecheck`, before claiming a commit is clean. Biome catches things
+  ESLint does not: import/export ordering (`biome check --write .` fixes
+  those mechanically) and, more usefully, real bugs like an `aria-label` on
+  a `<p>` — no role that supports naming, so assistive tech ignores it even
+  though Playwright's `getByLabel` still finds it.
 - **A Playwright `getByRole("button", { name: <card name> })` matches the
   `Remove <card name>` button too.** The deck editor's search suggestions and
   its deck list both carry the card's name, so an unscoped by-name selector
