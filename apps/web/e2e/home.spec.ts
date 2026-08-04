@@ -27,6 +27,10 @@ test("shows an actionable setup prompt before the first successful sync (AC4)", 
   const pricesRow = page.getByRole("listitem").filter({ hasText: "Prices" });
   await expect(pricesRow.getByRole("button", { name: "Sync now" })).toBeEnabled();
 
+  // "Not yet available" until KAD-24 gave the hash index a real trigger; it
+  // now has its own Sync now button like the other two. This assertion was
+  // stale from that story, not from Sprint 5 - the same failure mode as the
+  // Prices row getting its own button, recorded in CLAUDE.md.
   const hashIndexRow = page.getByRole("listitem").filter({ hasText: "Hash index" });
-  await expect(hashIndexRow.getByText("Not yet available")).toBeVisible();
+  await expect(hashIndexRow.getByRole("button", { name: "Sync now" })).toBeEnabled();
 });

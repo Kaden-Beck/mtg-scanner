@@ -1,4 +1,4 @@
-import type { NewCardRow } from "../db/schema";
+import type { CardRow } from "../db/schema";
 
 /**
  * Card fixture builder for the deck stories (KAD-26/28/30/31).
@@ -13,7 +13,10 @@ import type { NewCardRow } from "../db/schema";
  * and a fixture module with no tests in it would fail the run as an empty
  * suite.
  */
-export function buildCard(id: string, overrides: Partial<NewCardRow> = {}): NewCardRow {
+/** Returns a full `CardRow` rather than `NewCardRow` so it can stand in for
+ * a selected row too (the deck view needs one); `CardRow` is assignable to
+ * `NewCardRow`, so inserts still take it. */
+export function buildCard(id: string, overrides: Partial<CardRow> = {}): CardRow {
   const now = new Date();
   return {
     id,
@@ -50,6 +53,9 @@ export function buildCard(id: string, overrides: Partial<NewCardRow> = {}): NewC
     imageUris: null,
     scryfallUri: "https://scryfall.com/card/blb/280/forest",
     prices: {},
+    illustrationId: null,
+    artPhash: null,
+    fullPhash: null,
     createdAt: now,
     updatedAt: now,
     ...overrides,
