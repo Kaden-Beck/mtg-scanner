@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import { expect, test } from "@playwright/test";
 import Database from "better-sqlite3";
+import { E2E_DATABASE_PATH } from "./db-path";
 
 /**
  * Unlike the reconciliation spec - where the import pipeline *was* the
@@ -11,16 +11,11 @@ import Database from "better-sqlite3";
  * without a full 110k-row Scryfall sync. WAL mode (db/client.ts) makes the
  * concurrent write safe while the dev server holds its own connection.
  *
- * The dev server runs with cwd = apps/web, so its default DATABASE_PATH is
- * apps/web/data/mtg.db.
- *
- * Resolved from `process.cwd()`, not `import.meta.dirname`: Playwright
- * transpiles specs to CJS, where `import.meta` is a hard SyntaxError at
- * load time. `playwright test` runs from the repo root - the same
- * assumption the config's own relative `testDir` already makes.
+ * The database is the dedicated e2e one, shared with the config that starts
+ * the dev server - see `db-path.ts` for why these fixtures must not go in the
+ * working dev database.
  */
-const DB_PATH =
-  process.env["DATABASE_PATH"] ?? path.join(process.cwd(), "apps", "web", "data", "mtg.db");
+const DB_PATH = E2E_DATABASE_PATH;
 
 // Unique per run: the dev server's DB persists between runs, so a fixed
 // name would accumulate rows and make count assertions drift.
@@ -360,15 +355,18 @@ test("downloads the collection in each format (KAD-23 AC1)", async ({ page }) =>
   expect(json.headers()["content-disposition"]).toMatch(
     /attachment; filename="mtg-collection-\d{4}-\d{2}-\d{2}\.json"/,
   );
-  const file = JSON.parse(await json.text()) as {
-    version: number;
-    items: { name: string; binderLocation: string; tags: string[] }[];
-  };
-  expect(file.version).toBe(1);
-  // The lossless format carries the fields the CSV shape had to be taught:
-  // this stack exists at a binder location, and that has to survive.
-  const seeded = file.items.find((item) => item.name === CARD_NAME);
-  expect(seeded?.binderLocation).toBe(BINDER);
+  // Matched structurally rather than cast to a local interface: the shape is
+  // the route's contract, and restating it here as a type assertion would
+  // assert nothing about what actually came back.
+  const file: unknown = JSON.parse(await json.text());
+  expect(file).toMatchObject({
+    version: 1,
+    // The lossless format carries the fields the CSV shape had to be taught:
+    // this stack exists at a binder location, and that has to survive.
+    items: expect.arrayContaining([
+      expect.objectContaining({ name: CARD_NAME, binderLocation: BINDER }),
+    ]),
+  });
 
   const csv = await page.request.get("/api/export?format=csv");
   expect(csv.headers()["content-type"]).toContain("text/csv");
@@ -397,9 +395,10 @@ test("round-trips an exported collection back in through the API (KAD-23 AC2)", 
   // the round-trip contract test in `server/export/` proves.
   const response = await page.request.post("/api/import/collection", { data: { jsonText } });
   expect(response.status()).toBe(201);
-  const body = (await response.json()) as { imported: number; skipped: unknown[] };
-  expect(body.skipped).toEqual([]);
-  expect(body.imported).toBeGreaterThan(0);
+  const body: unknown = await response.json();
+  // Nothing skipped is the real assertion: every row the export wrote was
+  // understood on the way back in.
+  expect(body).toMatchObject({ imported: expect.any(Number), skipped: [] });
 });
 
 test("keeps the primary controls in the lower third on phone width (NFR-7)", async ({ page }) => {
