@@ -1,0 +1,22 @@
+# Third-party notices
+
+This project is MIT-licensed (see `LICENSE`).
+
+## Joshua-Beatty/MTG-Scanner
+
+Copyright (c) 2025 Joshua Beatty. MIT License.
+
+Capture → identify → confirm UI flow for the `/scan` page was informed by
+https://github.com/Joshua-Beatty/MTG-Scanner (MIT). No substantial portion of
+that repository is vendored here; the local implementation is original.
+
+## GrimbiXcode/mtgscan — ideas only
+
+https://github.com/GrimbiXcode/mtgscan is licensed under **GPL-3.0** (its
+README historically claimed MIT incorrectly). This project does **not**
+vendor or copy that code.
+
+Collector-number multi-crop fallback, foil/brightness heuristics, and the
+decision to OCR the collector-number strip rather than card names are
+*ideas* reimplemented from public write-ups of that approach. The TypeScript
+in `packages/scan-ocr` is original work under this repository's MIT license.

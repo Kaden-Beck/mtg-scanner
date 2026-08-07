@@ -170,6 +170,15 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  packages/scan-ocr:
+    devDependencies:
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260707.2
+        version: 7.0.0-dev.20260707.2
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
   packages/schemas:
     dependencies:
       zod:
