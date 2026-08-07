@@ -142,6 +142,6 @@ the point: it tells you how far along you are.
 ## After the shoot
 
 1. `pnpm corpus:validate` clean.
-2. Once a recognizer exists (KAD-40 lands T1), run the harness and record
+2. Once a recognizer exists (KAD-44 OCR-primary / ADR-008), run the harness and record
    `baseline.json`. From then on, CI fails any change that drops accuracy by
    more than one percentage point.

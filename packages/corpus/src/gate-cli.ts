@@ -32,7 +32,9 @@ const CORPUS_DIR = resolve(
 async function main(): Promise<void> {
   const recognize = activeRecognizer();
   if (!recognize) {
-    console.log("No recognizer registered yet (see recognizer-registry.ts; T1 lands in KAD-40).");
+    console.log(
+      "No recognizer registered yet (see recognizer-registry.ts; OCR-primary lands via apps/web gate-cli, KAD-44 / ADR-008).",
+    );
     console.log("Nothing to measure - skipping the accuracy gate.");
     return;
   }

@@ -14,11 +14,9 @@ import { buildReport } from "./metrics.ts";
  * number that depends on Scryfall being up is not a regression gate, it is a
  * flaky test that occasionally comments on accuracy.
  *
- * The recognizer is a parameter rather than an import because none exists
- * yet: T0 is KAD-39, T1 KAD-40, T2 KAD-44, T3 KAD-51, T4 KAD-47. Fixing the
- * measurement before the thing being measured is the entire point of building
- * the corpus first, so this file is written to be plugged into rather than
- * changed.
+ * The recognizer is a parameter rather than an import because the concrete
+ * implementation (OCR-primary, KAD-44 / ADR-008) lives in apps/web — it needs
+ * sharp and the SQLite cards table. packages/corpus stays measurement-only.
  */
 
 export interface RecognizerOutput {

@@ -12,7 +12,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --experimental-strip-types src/server/db/migrate.ts",
     "db:restore": "node --experimental-strip-types src/server/db/restore-cli.ts",
-    "corpus:label": "node --experimental-strip-types src/server/corpus/label-cli.ts"
+    "corpus:label": "node --experimental-strip-types src/server/corpus/label-cli.ts",
+    "corpus:gate": "node --experimental-strip-types src/server/scan/gate-cli.ts"
   },
   "dependencies": {
     "@mtg/corpus": "workspace:*",

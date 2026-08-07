@@ -18,7 +18,7 @@
     "test:e2e": "playwright test",
     "test:perf": "vitest run --project perf",
     "corpus:validate": "node --experimental-strip-types packages/corpus/src/validate-cli.ts",
-    "corpus:gate": "node --experimental-strip-types packages/corpus/src/gate-cli.ts",
+    "corpus:gate": "pnpm --filter web corpus:gate",
     "corpus:label": "pnpm --filter web corpus:label"
   },
   "devDependencies": {

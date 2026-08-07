@@ -67,9 +67,9 @@ jobs:
   # gated, for exactly the perf job's reason.
   #
   # Inert until two things exist: the corpus (KAD-36) and a recognizer to
-  # measure (T1 lands in KAD-40). Both conditions are checked here rather
-  # than in a comment so the job turns itself on rather than waiting for
-  # someone to remember it.
+  # measure (OCR-primary, KAD-44 / ADR-008). Both conditions are checked here
+  # rather than in a comment so the job turns itself on rather than waiting
+  # for someone to remember it.
   recognition-accuracy:
     runs-on: ubuntu-latest
     steps:
@@ -89,7 +89,7 @@ jobs:
         run: |
           if [ ! -f tests/corpus/baseline.json ]; then
             echo "No tests/corpus/baseline.json yet - nothing to regress against."
-            echo "Record one once a recognizer exists (KAD-40)."
+            echo "Record one once a recognizer exists (KAD-44 / ADR-008)."
             exit 0
           fi
           if [ ! -d tests/corpus/images ]; then

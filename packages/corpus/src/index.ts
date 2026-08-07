@@ -56,3 +56,4 @@ export {
   TIERS,
   type Tier,
 } from "./metrics.ts";
+export { activeRecognizer, registerRecognizer } from "./recognizer-registry.ts";

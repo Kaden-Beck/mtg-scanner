@@ -76,7 +76,10 @@ describe("POST /api/scan/resolve", () => {
     });
     const response = await POST(request);
     expect(response.status).toBe(200);
-    const body = await response.json();
+    const body = (await response.json()) as {
+      ok: true;
+      card: { scryfallId: string; name: string; setCode: string };
+    };
     expect(body.ok).toBe(true);
     expect(body.card.scryfallId).toBe(scryfallId);
     expect(body.card.name).toBe("Forest");
@@ -92,10 +95,14 @@ describe("POST /api/scan/resolve", () => {
     });
     const response = await POST(request);
     expect(response.status).toBe(404);
-    const body = await response.json();
+    const body = (await response.json()) as {
+      ok: false;
+      error: string;
+      suggestions: string[];
+    };
     expect(body.ok).toBe(false);
     expect(body.error).toBe("not_found");
-    expect(body.suggestions.some((s: string) => s.startsWith("blb"))).toBe(true);
+    expect(body.suggestions.some((s) => s.startsWith("blb"))).toBe(true);
   });
 
   it("rejects invalid bodies", async () => {

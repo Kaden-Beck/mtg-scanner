@@ -6,7 +6,8 @@ import type { CorpusEntry } from "./manifest.ts";
  * Written before any recognizer exists, which is the point: the harness
  * consumes a `RecognitionResult` rather than calling a scanner, so the
  * definition of success is fixed now and each tier plugs into it as it lands
- * (T0 KAD-39, T1 KAD-40, T2 KAD-44, T3 KAD-51, T4 KAD-47).
+ * (T0 KAD-39 deferred, T1 KAD-40 deferred, T2 KAD-44 OCR-primary per ADR-008,
+ * T3 KAD-51, T4 KAD-47).
  */
 
 /** Which tier produced the answer. Ordered, so escalation is comparable. */
