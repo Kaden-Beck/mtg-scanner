@@ -64,6 +64,16 @@ export {
   importCollectionJsonRequestSchema,
 } from "./import";
 export {
+  type ScanCommitRequest,
+  type ScanResolvedCard,
+  type ScanResolveRequest,
+  type ScanResolveResponse,
+  scanCommitRequestSchema,
+  scanResolvedCardSchema,
+  scanResolveRequestSchema,
+  scanResolveResponseSchema,
+} from "./scan";
+export {
   isCollectibleCard,
   type ScryfallCard,
   scryfallCardSchema,
