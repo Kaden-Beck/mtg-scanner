@@ -1,7 +1,7 @@
 import type { Recognizer, RecognizerOutput } from "@mtg/corpus";
 import { type OcrEngine, type RgbaImage, recognizeCollectorNumber } from "@mtg/scan-ocr";
-import { findPrinting } from "../corpus/lookup";
-import { createNodeTesseractEngine, loadRgbaFromFile } from "./node-tesseract";
+import { findPrinting } from "../corpus/lookup.ts";
+import { createNodeTesseractEngine, loadRgbaFromFile } from "./node-tesseract.ts";
 
 export interface OcrRecognizerOptions {
   readonly engine?: OcrEngine;

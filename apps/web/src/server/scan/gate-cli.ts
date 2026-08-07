@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -28,6 +29,12 @@ const CORPUS_DIR = resolve(
 );
 
 async function main(): Promise<void> {
+  if (!existsSync(resolve(CORPUS_DIR, "labels.json"))) {
+    console.log("No tests/corpus/labels.json yet - nothing to measure.");
+    console.log("Label the corpus (pnpm corpus:label / corpus:from-manabox) first.");
+    return;
+  }
+
   const recognize = createOcrRecognizer();
   const { report } = await evaluate({ corpusDir: CORPUS_DIR, recognize });
   console.log(formatReport(report));

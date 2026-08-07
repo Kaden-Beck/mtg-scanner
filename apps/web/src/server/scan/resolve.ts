@@ -1,5 +1,5 @@
 import { type ScanResolvedCard, scanResolvedCardSchema } from "@mtg/schemas";
-import { findPrinting, suggestSets } from "../corpus/lookup";
+import { findPrinting, suggestSets } from "../corpus/lookup.ts";
 
 export type ResolvePrintingResult =
   | { ok: true; card: ScanResolvedCard }
