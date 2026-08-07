@@ -7,6 +7,9 @@ export type { PreprocessMode };
  * Lightweight grayscale + contrast stretch for OCR. Foil mode biases toward
  * crushing specular highlights so the CN glyphs stay readable.
  *
+ * Modern CN strips are white text on a black border; Tesseract prefers dark
+ * text on a light field, so dark-majority crops are inverted after stretch.
+ *
  * Returns a single-channel buffer (one byte per pixel) — engines that need
  * RGBA can expand it.
  */
@@ -14,6 +17,7 @@ export function preprocessForOcr(image: RgbaImage, mode: PreprocessMode): Uint8C
   const out = new Uint8ClampedArray(image.width * image.height);
   let min = 255;
   let max = 0;
+  let sum = 0;
   const gray = new Uint8ClampedArray(image.width * image.height);
 
   for (let i = 0, p = 0; i < image.data.length; i += 4, p += 1) {
@@ -27,6 +31,7 @@ export function preprocessForOcr(image: RgbaImage, mode: PreprocessMode): Uint8C
       v = 180;
     }
     gray[p] = v;
+    sum += v;
     if (v < min) min = v;
     if (v > max) max = v;
   }
@@ -35,6 +40,14 @@ export function preprocessForOcr(image: RgbaImage, mode: PreprocessMode): Uint8C
   for (let p = 0; p < gray.length; p += 1) {
     const v = gray[p] ?? 0;
     out[p] = Math.round(((v - min) / span) * 255);
+  }
+
+  const mean = sum / Math.max(1, gray.length);
+  // Dark border with light glyphs → invert so Tesseract sees black-on-white.
+  if (mean < 110) {
+    for (let p = 0; p < out.length; p += 1) {
+      out[p] = 255 - (out[p] ?? 0);
+    }
   }
   return out;
 }

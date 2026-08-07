@@ -63,3 +63,19 @@ describe("collector number crop strategies", () => {
     expect([...cropped.data.slice(0, 3)]).toEqual([255, 0, 0]);
   });
 });
+
+describe("upscaleForOcr", () => {
+  it("scales a short crop up to the minimum height", async () => {
+    const { upscaleForOcr } = await import("./image.ts");
+    const tiny = solid(20, 16, [0, 0, 0, 255]);
+    const scaled = upscaleForOcr(tiny, { minHeight: 64, maxScale: 4 });
+    expect(scaled.height).toBe(64);
+    expect(scaled.width).toBe(80);
+  });
+
+  it("leaves a tall enough crop alone", async () => {
+    const { upscaleForOcr } = await import("./image.ts");
+    const ok = solid(100, 80, [0, 0, 0, 255]);
+    expect(upscaleForOcr(ok, { minHeight: 64 })).toBe(ok);
+  });
+});

@@ -35,9 +35,31 @@ export function pickVideoDeviceId(
 }
 
 export function buildVideoConstraints(deviceId: string | null): MediaTrackConstraints {
+  // Ask for a high-res rear camera when possible. CN glyphs are tiny; more
+  // pixels beat digital zoom after the fact. focusMode is applied separately
+  // via applyConstraints — not all browsers accept it in getUserMedia.
+  const quality: MediaTrackConstraints = {
+    width: { ideal: 3840 },
+    height: { ideal: 2160 },
+  };
   if (deviceId) {
-    return { deviceId: { exact: deviceId } };
+    return { deviceId: { exact: deviceId }, ...quality };
   }
   // AC1: rear camera by default on phones.
-  return { facingMode: { ideal: "environment" } };
+  return { facingMode: { ideal: "environment" }, ...quality };
+}
+
+/**
+ * Best-effort continuous autofocus. iOS Safari often ignores this; harmless
+ * when unsupported. Call after getUserMedia succeeds.
+ */
+export async function applyScanFocus(track: MediaStreamTrack): Promise<void> {
+  try {
+    await track.applyConstraints({
+      // Not in every TS DOM lib; cast keeps the call site typed elsewhere.
+      advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet],
+    });
+  } catch {
+    // Capability missing — leave browser defaults.
+  }
 }

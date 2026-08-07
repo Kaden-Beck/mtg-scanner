@@ -11,6 +11,7 @@ import {
 } from "@mtg/schemas";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  applyScanFocus,
   buildVideoConstraints,
   listVideoInputs,
   readStoredDeviceId,
@@ -90,6 +91,10 @@ export function Scanner() {
           audio: false,
           video: buildVideoConstraints(preferredId),
         });
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          await applyScanFocus(track);
+        }
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -424,9 +429,12 @@ export function Scanner() {
             aria-hidden
             className="pointer-events-none absolute rounded border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
             style={{ inset: `${SCAN_GUIDE_INSET * 100}%` }}
-          />
-          <p className="pointer-events-none absolute bottom-3 left-0 right-0 text-center text-xs text-white/90">
-            Fill the frame with the card — bottom-left is the set/number strip
+          >
+            {/* CN / set strip target — get this corner large and sharp. */}
+            <div className="absolute bottom-[2%] left-[2%] h-[14%] w-[42%] rounded-sm border-2 border-amber-300 shadow-[0_0_0_1px_rgba(0,0,0,0.4)]" />
+          </div>
+          <p className="pointer-events-none absolute bottom-3 left-0 right-0 px-3 text-center text-xs text-white/90">
+            Get close — fill the yellow box with the set/number text
           </p>
         </div>
       )}

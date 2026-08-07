@@ -14,7 +14,9 @@ export {
   cropRgba,
   type NormRect,
   type RgbaImage,
+  scaleRgbaNearest,
   toPixelRect,
+  upscaleForOcr,
 } from "./image.ts";
 export {
   isRejectedOcrText,

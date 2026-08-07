@@ -59,3 +59,40 @@ export function cropRgba(image: RgbaImage, rect: CropRect): RgbaImage {
   }
   return { width, height, data };
 }
+
+/**
+ * Nearest-neighbor upscale. Phone CN crops are often only ~20–40px tall —
+ * Tesseract needs glyphs closer to ~30px+ to stop guessing.
+ */
+export function scaleRgbaNearest(image: RgbaImage, scale: number): RgbaImage {
+  const s = Math.max(1, Math.floor(scale));
+  if (s === 1) return image;
+  const width = image.width * s;
+  const height = image.height * s;
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    const sy = Math.floor(y / s);
+    for (let x = 0; x < width; x += 1) {
+      const sx = Math.floor(x / s);
+      const si = (sy * image.width + sx) * 4;
+      const di = (y * width + x) * 4;
+      data[di] = image.data[si] ?? 0;
+      data[di + 1] = image.data[si + 1] ?? 0;
+      data[di + 2] = image.data[si + 2] ?? 0;
+      data[di + 3] = image.data[si + 3] ?? 255;
+    }
+  }
+  return { width, height, data };
+}
+
+/** Scale up until height reaches `minHeight` (capped), for OCR readability. */
+export function upscaleForOcr(
+  image: RgbaImage,
+  options: { minHeight?: number; maxScale?: number } = {},
+): RgbaImage {
+  const minHeight = options.minHeight ?? 64;
+  const maxScale = options.maxScale ?? 4;
+  if (image.height >= minHeight) return image;
+  const scale = Math.min(maxScale, Math.ceil(minHeight / Math.max(1, image.height)));
+  return scaleRgbaNearest(image, scale);
+}

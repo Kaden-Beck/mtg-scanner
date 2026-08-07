@@ -47,8 +47,16 @@ describe("camera device helpers", () => {
     expect(pickVideoDeviceId(devices, "gone")).toBeNull();
   });
 
-  it("asks for the environment-facing camera when no device is stored", () => {
-    expect(buildVideoConstraints(null)).toEqual({ facingMode: { ideal: "environment" } });
-    expect(buildVideoConstraints("v1")).toEqual({ deviceId: { exact: "v1" } });
+  it("asks for a high-res environment camera when no device is stored", () => {
+    expect(buildVideoConstraints(null)).toEqual({
+      facingMode: { ideal: "environment" },
+      width: { ideal: 3840 },
+      height: { ideal: 2160 },
+    });
+    expect(buildVideoConstraints("v1")).toEqual({
+      deviceId: { exact: "v1" },
+      width: { ideal: 3840 },
+      height: { ideal: 2160 },
+    });
   });
 });

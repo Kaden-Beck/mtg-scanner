@@ -7,7 +7,7 @@ import {
 } from "./crop.ts";
 import type { OcrEngine } from "./engine.ts";
 import { detectFoilCard, type PreprocessMode } from "./foil.ts";
-import { cropRgba, type RgbaImage, toPixelRect } from "./image.ts";
+import { cropRgba, type RgbaImage, toPixelRect, upscaleForOcr } from "./image.ts";
 import { type ParsedCollectorNumber, sanitizeCardName } from "./parse.ts";
 import { grayToRgba, preprocessForOcr } from "./preprocess.ts";
 import { EARLY_EXIT_SCORE, type ScoredOcrResult, scoreOcrAttempt } from "./score.ts";
@@ -36,8 +36,11 @@ async function ocrCrop(
 ): Promise<ScoredOcrResult> {
   const pixel = toPixelRect(image, strategy.rect);
   const cropped = cropRgba(image, pixel);
-  const gray = preprocessForOcr(cropped, mode);
-  const prepared = grayToRgba(gray, cropped.width, cropped.height);
+  // Phone captures leave the CN strip only tens of pixels tall; upscale before
+  // binarize so Tesseract has readable glyph size.
+  const scaled = upscaleForOcr(cropped, { minHeight: 72, maxScale: 4 });
+  const gray = preprocessForOcr(scaled, mode);
+  const prepared = grayToRgba(gray, scaled.width, scaled.height);
   const { text, confidence } = await engine.recognize(prepared);
   return scoreOcrAttempt({
     strategy: strategy.name,
@@ -164,8 +167,9 @@ export async function recognizeCardTitle(
   const mode = options.preprocessMode ?? "normal";
   const pixel = toPixelRect(image, TITLE_STRATEGY.rect);
   const cropped = cropRgba(image, pixel);
-  const gray = preprocessForOcr(cropped, mode);
-  const prepared = grayToRgba(gray, cropped.width, cropped.height);
+  const scaled = upscaleForOcr(cropped, { minHeight: 64, maxScale: 3 });
+  const gray = preprocessForOcr(scaled, mode);
+  const prepared = grayToRgba(gray, scaled.width, scaled.height);
   const { text, confidence } = await options.engine.recognize(prepared);
   return {
     name: sanitizeCardName(text),

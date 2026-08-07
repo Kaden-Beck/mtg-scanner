@@ -14,6 +14,8 @@ export function createTesseractEngine(): OcrEngine {
       const { createWorker } = await import("tesseract.js");
       const worker = await createWorker("eng");
       await worker.setParameters({
+        // Single text line — CN strips and titles are one row of glyphs.
+        tessedit_pageseg_mode: "7",
         tessedit_char_whitelist:
           "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/★† ",
       });
