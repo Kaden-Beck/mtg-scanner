@@ -1,0 +1,13 @@
+---
+description: Story shipping, commits, and Tech Debt ticket expectations for this repo
+alwaysApply: true
+---
+
+# Process
+
+- **Commits:** one commit per Linear story; subject includes the issue id (e.g. `KAD-44: …`). Only commit when the user asks.
+- **After landing:** mark the Linear issue Done and comment with the commit SHA(s) — don't batch to sprint end.
+- **Default ship path:** direct commits to `main` unless the user asks for a PR.
+- **Descopes / gaps:** open a Linear ticket with the `Tech Debt` label (what, why deferred, what breaks, where in code). If a test documents the gap, name that test on the ticket.
+- **Verify before "clean":** `pnpm lint` + `pnpm lint:biome` + `pnpm typecheck` (+ tests relevant to the change).
+- Long-form context: `CLAUDE.md` and `docs/adr/`. Use the `ship-story` / `verify-clean` / `dev-container` project skills for those workflows.

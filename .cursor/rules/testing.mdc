@@ -1,0 +1,16 @@
+---
+description: Vitest / Playwright conventions and e2e fixture pitfalls
+globs: "**/*.{test,spec}.{ts,tsx},**/e2e/**,vitest.config.ts,vitest.setup.ts,playwright.config.ts"
+alwaysApply: false
+---
+
+# Testing conventions
+
+- **Vitest split by extension:** `*.test.ts` → node; `*.test.tsx` → jsdom. RSC pages are Playwright-only (ADR-007) — extract pure logic to `.test.ts` modules.
+- **Fresh DB in tests:** `vi.resetModules()` *and* null `globalThis.__mtgSqlite` / `__mtgDb`, then re-import. One without the other leaves a stale connection.
+- **Vitest 4 timeouts:** options are the second arg — `test(name, { timeout }, fn)` is gone.
+- **FTS:** seeding `cards` alone does not populate `cards_fts`. Any spec that searches must `insertFts` itself.
+- **Playwright a11y:** never bare `getByRole("alert")` (Next's route announcer competes). Name the app alert. Scope card-name buttons — `Remove <name>` also matches.
+- **Fixtures:** mutating/claiming rows must be per-test, not shared across specs (order dependence). Prefer `apps/web/data/e2e.db`; `reuseExistingServer` keeps a live `:3000` on its own DB.
+- **Paths in specs:** no `import.meta` in Playwright specs (CJS transpile → SyntaxError). Use `process.cwd()`.
+- **Before claiming clean:** run `pnpm lint`, `pnpm lint:biome`, and `pnpm typecheck` — CI runs both linters.

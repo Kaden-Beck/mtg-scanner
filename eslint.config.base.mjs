@@ -1,3 +1,4 @@
+import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 
 /**
@@ -12,7 +13,7 @@ import tseslint from "typescript-eslint";
  * needs a cast and tests aren't domain code.
  */
 export function baseConfig(tsconfigRootDir) {
-  return tseslint.config(
+  return defineConfig(
     // Config files (eslint.config.mjs, postcss.config.mjs, ...) aren't part
     // of any tsconfig project and don't need type-aware linting.
     { ignores: ["*.config.mjs", "*.config.cjs"] },

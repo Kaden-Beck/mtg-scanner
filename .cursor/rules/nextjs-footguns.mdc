@@ -1,0 +1,20 @@
+---
+description: Next 16 / SQLite / SSR footguns that unit tests miss — use when editing apps/web
+globs: apps/web/**
+alwaysApply: false
+---
+
+# Next 16 / apps/web footguns
+
+Full list lives in `CLAUDE.md`. These bite when touching adjacent code:
+
+- **Paths:** `import.meta.dirname` is `undefined` in the SSR/Turbopack bundle. Use `process.cwd()`-based paths in app runtime code.
+- **Cache Components:** sync better-sqlite3 reads get prerendered unless you `await connection()` from `next/server` first. Live routes must show `ƒ Dynamic` in `next build`, not `○ Static`.
+- **`connection()`:** throws outside a real Next request — don't unit-test the wrapper; contract-test the logic underneath; Playwright/`next build` for the line itself.
+- **DB file:** `mkdir -p` the parent dir before `new Database(path)`.
+- **Migrations:** `next build` races `migrate()` across workers — expect one failed build after any new migration (KAD-57); second build succeeds.
+- **Batch SQL:** `cards` upsert batch size is 200 (SQLite variable limit).
+- **Env access:** `process.env["X"]` — tsconfig `noPropertyAccessFromIndexSignature` wins over Biome `useLiteralKeys`.
+- **Standalone CLIs:** every relative import in the reachable graph needs a `.ts` suffix for `node --experimental-strip-types`.
+
+When changing this area, re-verify with `next build` / `next dev` / `docker compose up --build`, not just `pnpm test`.

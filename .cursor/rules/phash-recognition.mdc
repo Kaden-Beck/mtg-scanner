@@ -1,0 +1,12 @@
+---
+description: pHash / recognition pipeline — single hash implementation, OCR gate wiring
+globs: packages/phash/**,packages/scan-ocr/**,packages/corpus/**,apps/web/src/server/ingest/decode-image.ts,apps/web/src/server/ingest/hash-index.ts,apps/web/src/server/scan/**,apps/web/src/app/scan/**
+alwaysApply: false
+---
+
+# Recognition / pHash
+
+- **One hash impl:** `packages/phash` owns resize / grayscale / DCT / binarization. `sharp` is decode-only (`server/ingest/decode-image.ts`). Divergent resamplers silently break matching after a full corpus hash.
+- **Float safety:** quantize DCT coeffs before median binarization; featureless images → hash `0`. Same family: round deltas before comparing to a tolerance (KAD-37 gate).
+- **Ownership matching** elsewhere is oracle-level (`oracle_id`); printing is tracked for "different art" UX.
+- **Accuracy gate:** `pnpm corpus:gate` — register the recognizer in `recognizer-registry.ts` only; do not stub plausible candidates. Corpus images are gitignored by default (`tests/corpus/`).

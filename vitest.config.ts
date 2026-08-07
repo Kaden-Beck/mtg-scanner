@@ -10,6 +10,11 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
+    // Root-only option (not valid on project configs). RSC-heavy pages
+    // (ADR-007) currently have no client-side islands to unit test —
+    // Playwright covers them. Fails loudly again the moment a
+    // jsdom-matching test file exists but doesn't run.
+    passWithNoTests: true,
     projects: [
       {
         resolve: {
@@ -31,10 +36,6 @@ export default defineConfig({
           environment: "jsdom",
           setupFiles: ["./vitest.setup.ts"],
           include: ["apps/web/src/**/*.test.tsx"],
-          // RSC-heavy pages (ADR-007) currently have no client-side islands
-          // to unit test - Playwright covers them. Fails loudly again the
-          // moment a jsdom-matching test file exists but doesn't run.
-          passWithNoTests: true,
         },
       },
       {
