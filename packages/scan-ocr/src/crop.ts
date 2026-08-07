@@ -1,34 +1,59 @@
 import type { NormRect } from "./image.ts";
 
 /**
- * Collector-number strip strategies for a *card-aligned* guide frame.
+ * Region crops for a *card-aligned* guide frame.
  *
- * Modern frames put set code + collector number in the bottom-left. These
- * are fixed fractions of the framed card — not CV-detected regions. Wider /
- * offset variants exist so a slightly misaligned guide still yields a
- * readable crop without falling back to full-card OCR.
+ * Modern frames (e.g. SOS) print a two-line bottom-left strip:
+ *   C 0041
+ *   SOS • EN ★ Artist Name
+ * One fat crop feeds Tesseract rarity, number, set, language, and artist at
+ * once. Split crops keep the number line and the set token separate; the
+ * title band is a miss-fallback (name + set), not the primary path.
  *
- * Ideas only (no code copy): hobbyist scanners that succeeded on CN OCR
- * used multi-crop fallback with early exit on a scored hit.
+ * Ideas only (no code copy): hobbyist CN OCR used multi-crop + early exit;
+ * vision scanners that also read the title use it as a secondary signal.
  */
-export type CropStrategyName = "optimal" | "wider" | "offsetUp" | "offsetLeft";
+export type CropStrategyName =
+  | "numberLine"
+  | "setLine"
+  | "optimal"
+  | "wider"
+  | "offsetUp"
+  | "offsetLeft"
+  | "title";
 
 export interface CropStrategy {
   readonly name: CropStrategyName;
   readonly rect: NormRect;
 }
 
+/** Primary: rarity + collector number only (`C 0041`). */
+export const NUMBER_LINE_STRATEGY: CropStrategy = {
+  name: "numberLine",
+  rect: { x: 0.02, y: 0.895, width: 0.32, height: 0.04 },
+};
+
+/** Primary: set code only — stop before EN / artist on the second line. */
+export const SET_LINE_STRATEGY: CropStrategy = {
+  name: "setLine",
+  rect: { x: 0.02, y: 0.935, width: 0.2, height: 0.04 },
+};
+
+/** Title / name bar — miss fallback when CN lookup fails. */
+export const TITLE_STRATEGY: CropStrategy = {
+  name: "title",
+  rect: { x: 0.06, y: 0.035, width: 0.7, height: 0.085 },
+};
+
 /**
- * Fractions assume the user has aligned the physical card to an on-screen
- * guide that fills most of the frame (MTG portrait aspect ≈ 63:88).
+ * Combined-strip fallbacks when split lines miss (older one-line prints like
+ * `FDN U 0125`, slight misalignment).
  */
 export const COLLECTOR_NUMBER_STRATEGIES: readonly CropStrategy[] = [
-  // Tight bottom-left strip: number + set code.
-  { name: "optimal", rect: { x: 0.02, y: 0.88, width: 0.42, height: 0.09 } },
-  // Wider horizontally and vertically for borderless / slight misalign.
-  { name: "wider", rect: { x: 0.0, y: 0.84, width: 0.55, height: 0.14 } },
-  // Nudge up when the card sits low in the guide.
-  { name: "offsetUp", rect: { x: 0.02, y: 0.82, width: 0.45, height: 0.1 } },
-  // Nudge left for cards shifted right in the guide.
-  { name: "offsetLeft", rect: { x: 0.0, y: 0.87, width: 0.4, height: 0.1 } },
+  NUMBER_LINE_STRATEGY,
+  SET_LINE_STRATEGY,
+  { name: "optimal", rect: { x: 0.02, y: 0.905, width: 0.42, height: 0.07 } },
+  { name: "wider", rect: { x: 0.0, y: 0.88, width: 0.5, height: 0.11 } },
+  { name: "offsetUp", rect: { x: 0.02, y: 0.86, width: 0.42, height: 0.09 } },
+  { name: "offsetLeft", rect: { x: 0.0, y: 0.9, width: 0.38, height: 0.08 } },
 ];

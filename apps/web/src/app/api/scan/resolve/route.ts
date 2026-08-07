@@ -12,7 +12,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const result = resolvePrinting(parsed.data.setCode, parsed.data.collectorNumber);
+  const result = resolvePrinting(
+    parsed.data.setCode,
+    parsed.data.collectorNumber,
+    parsed.data.name,
+  );
   if (!result.ok) {
     return NextResponse.json(result, { status: 404 });
   }

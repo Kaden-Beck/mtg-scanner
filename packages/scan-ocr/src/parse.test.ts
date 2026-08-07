@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isRejectedOcrText, parseCollectorNumber, sanitizeOcrText } from "./parse.ts";
+import {
+  isRejectedOcrText,
+  parseCollectorNumber,
+  sanitizeCardName,
+  sanitizeOcrText,
+} from "./parse.ts";
 
 describe("sanitizeOcrText", () => {
   it("collapses whitespace and strips punctuation noise", () => {
@@ -10,7 +15,7 @@ describe("sanitizeOcrText", () => {
 describe("isRejectedOcrText", () => {
   it("rejects too-short and too-long strings", () => {
     expect(isRejectedOcrText("ab")).toBe(true);
-    expect(isRejectedOcrText("x".repeat(31))).toBe(true);
+    expect(isRejectedOcrText("x".repeat(41))).toBe(true);
   });
 
   it("rejects truncation markers and rules-text false positives", () => {
@@ -48,6 +53,22 @@ describe("parseCollectorNumber", () => {
     });
   });
 
+  it("parses modern two-line strip noise (rarity, EN, artist)", () => {
+    expect(parseCollectorNumber("C 0041 SOS EN Erin Fong")).toEqual({
+      setCode: "sos",
+      collectorNumber: "0041",
+      raw: "C 0041 SOS EN Erin Fong",
+    });
+  });
+
+  it("ignores language codes as set codes", () => {
+    expect(parseCollectorNumber("0041 EN")).toEqual({
+      setCode: null,
+      collectorNumber: "0041",
+      raw: "0041 EN",
+    });
+  });
+
   it("returns number-only when set is missing", () => {
     expect(parseCollectorNumber("0125")).toEqual({
       setCode: null,
@@ -62,5 +83,15 @@ describe("parseCollectorNumber", () => {
       collectorNumber: null,
       raw: "Destroy target",
     });
+  });
+});
+
+describe("sanitizeCardName", () => {
+  it("keeps a plausible title", () => {
+    expect(sanitizeCardName("  Chase Inspiration  ")).toBe("Chase Inspiration");
+  });
+
+  it("rejects pure digits", () => {
+    expect(sanitizeCardName("0041")).toBeNull();
   });
 });

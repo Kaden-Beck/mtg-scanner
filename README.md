@@ -18,6 +18,24 @@ network interfaces only — nothing here exposes it to the public internet;
 that would require an explicit port-forward on your router, which this
 setup deliberately does not do.
 
+### Phone camera over LAN (HTTPS)
+
+iOS Safari only allows the camera in a secure context. For local smoke:
+
+```sh
+./scripts/mint-lan-certs.sh          # once per LAN IP change
+./scripts/serve-dev-ca.sh            # leave running; install CA on the phone
+# in the node container / on a machine with Node:
+pnpm --filter web dev:lan
+```
+
+1. On the phone open `http://<lan-ip>:3080/rootCA.pem` → Install the profile.
+2. Settings → General → About → Certificate Trust Settings → enable **MTG Scanner Dev CA**.
+3. Open `https://<lan-ip>:3000/scan` (not `http`).
+
+`apps/web/next.config.ts` already allows the LAN host in `allowedDevOrigins` so
+the Next 16 client bundle hydrates when you are not on `localhost`.
+
 The SQLite database lives on a named Docker volume (`mtg-data`), so it
 survives container restarts and rebuilds. Migrations run automatically on
 container start.

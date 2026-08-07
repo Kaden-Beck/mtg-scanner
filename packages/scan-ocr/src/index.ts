@@ -1,11 +1,11 @@
-/**
- * Collector-number OCR helpers for the OCR-primary scanner (KAD-44).
- *
- * Pure geometry / scoring / parsing live here. Decoding and the concrete OCR
- * engine (Tesseract.js in the browser, later PaddleOCR-VL on the worker) stay
- * outside so this package stays isomorphic and license-clean.
- */
-export { COLLECTOR_NUMBER_STRATEGIES, type CropStrategy, type CropStrategyName } from "./crop.ts";
+export {
+  COLLECTOR_NUMBER_STRATEGIES,
+  type CropStrategy,
+  type CropStrategyName,
+  NUMBER_LINE_STRATEGY,
+  SET_LINE_STRATEGY,
+  TITLE_STRATEGY,
+} from "./crop.ts";
 export type { OcrEngine } from "./engine.ts";
 export { detectFoilCard, type PreprocessMode, preprocessModeFor } from "./foil.ts";
 export {
@@ -20,12 +20,16 @@ export {
   isRejectedOcrText,
   type ParsedCollectorNumber,
   parseCollectorNumber,
+  sanitizeCardName,
   sanitizeOcrText,
 } from "./parse.ts";
 export { grayToRgba, preprocessForOcr } from "./preprocess.ts";
 export {
+  mergeSplitParses,
+  type RecognizeCardTitleResult,
   type RecognizeCollectorNumberOptions,
   type RecognizeCollectorNumberResult,
+  recognizeCardTitle,
   recognizeCollectorNumber,
 } from "./recognize.ts";
 export {

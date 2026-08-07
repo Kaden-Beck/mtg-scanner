@@ -91,13 +91,19 @@ describe("findPrinting", () => {
     expect(findPrinting("dom", "9999")).toBeNull();
   });
 
-  it("does not coerce the collector number to a integer", async () => {
-    // "168a" and "0168" are distinct real values; numeric comparison would
-    // silently match the wrong printing.
+  it("matches zero-padded OCR forms to the stored collector number", async () => {
+    // Cards often print "0168"; Scryfall/bulk store "168". Letter suffixes
+    // stay exact — "168a" is a different printing, not a pad of "168".
     await seed();
     const { findPrinting } = await import("./lookup");
-    expect(findPrinting("dom", "0168")).toBeNull();
+    expect(findPrinting("dom", "0168")?.card.id).toBe(elvesDom);
     expect(findPrinting("dom", "168a")).toBeNull();
+  });
+
+  it("retries O/0 confusions in the set code", async () => {
+    await seed();
+    const { findPrinting } = await import("./lookup");
+    expect(findPrinting("d0m", "168")?.card.id).toBe(elvesDom);
   });
 
   it("flags a printing whose art is shared with another", async () => {
@@ -156,5 +162,34 @@ describe("findByName", () => {
     await seed();
     const { findByName } = await import("./lookup");
     expect(findByName("sol ring")).toHaveLength(2);
+  });
+});
+
+describe("findPrintingByNameAndSet", () => {
+  it("resolves when the name is unique in the set", async () => {
+    await seed();
+    const { findPrintingByNameAndSet } = await import("./lookup");
+    expect(findPrintingByNameAndSet("Llanowar Elves", "dom")?.card.id).toBe(elvesDom);
+  });
+
+  it("is null when the name is ambiguous in the set", async () => {
+    // Two Sol Rings in different sets still unique per set — seed a duplicate name in dom.
+    await seed();
+    const { db } = await import("../db/client");
+    const { cards } = await import("../db/schema");
+    const { buildCard } = await import("../decks/test-cards");
+    const dup = scryfallIdSchema.parse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    db.insert(cards)
+      .values(
+        buildCard(dup, {
+          name: "Llanowar Elves",
+          setCode: "dom",
+          collectorNumber: "999",
+          illustrationId: null,
+        }),
+      )
+      .run();
+    const { findPrintingByNameAndSet } = await import("./lookup");
+    expect(findPrintingByNameAndSet("Llanowar Elves", "dom")).toBeNull();
   });
 });

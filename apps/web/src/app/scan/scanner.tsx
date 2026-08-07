@@ -1,6 +1,6 @@
 "use client";
 
-import { detectFoilCard, recognizeCollectorNumber } from "@mtg/scan-ocr";
+import { detectFoilCard, recognizeCardTitle, recognizeCollectorNumber } from "@mtg/scan-ocr";
 import {
   CONDITIONS,
   type Condition,
@@ -16,7 +16,9 @@ import {
   readStoredDeviceId,
   writeStoredDeviceId,
 } from "./camera";
+import { rgbaFromVideoGuide, SCAN_GUIDE_INSET } from "./capture-frame";
 import {
+  DEFAULT_SCAN_SESSION,
   type FinishDefault,
   readScanSession,
   resolveCommitFinish,
@@ -67,7 +69,9 @@ export function Scanner() {
   const [manualSet, setManualSet] = useState("");
   const [manualNumber, setManualNumber] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [session, setSession] = useState<ScanSessionState | null>(null);
+  // Always start with defaults so the panel is visible on first paint / SSR.
+  // sessionStorage is applied in an effect (may throw on some mobile browsers).
+  const [session, setSession] = useState<ScanSessionState>(DEFAULT_SCAN_SESSION);
   const [undoingId, setUndoingId] = useState<string | null>(null);
 
   const stopStream = useCallback(() => {
@@ -109,9 +113,18 @@ export function Scanner() {
   );
 
   useEffect(() => {
-    const stored = readStoredDeviceId(localStorage);
     const timer = setTimeout(() => {
-      setSession(readScanSession(sessionStorage));
+      try {
+        setSession(readScanSession(sessionStorage));
+      } catch {
+        setSession(DEFAULT_SCAN_SESSION);
+      }
+      let stored: string | null = null;
+      try {
+        stored = readStoredDeviceId(localStorage);
+      } catch {
+        stored = null;
+      }
       void startCamera(stored);
     }, 0);
     return () => {
@@ -125,30 +138,43 @@ export function Scanner() {
     writeScanSession(sessionStorage, next);
   }
 
-  async function resolveSetNumber(setCode: string, collectorNumber: string, likelyFoil: boolean) {
+  async function resolveSetNumber(
+    setCode: string,
+    collectorNumber: string | undefined,
+    likelyFoil: boolean,
+    name?: string,
+  ): Promise<boolean> {
     const response = await fetch("/api/scan/resolve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ setCode, collectorNumber }),
+      body: JSON.stringify({
+        setCode,
+        ...(collectorNumber ? { collectorNumber } : {}),
+        ...(name ? { name } : {}),
+      }),
     });
     const body: unknown = await response.json();
     if (isResolveOk(body)) {
       setCard(body.card);
       setFoilLikely(likelyFoil);
-      const defaults = session?.defaults ?? readScanSession(sessionStorage).defaults;
+      const defaults = session.defaults;
       setFinish(resolveCommitFinish(defaults, likelyFoil));
       setSuggestions([]);
       setPhase("confirm");
-      return;
+      return true;
     }
     if (isResolveMiss(body)) {
       setSuggestions(body.suggestions);
-      setError("No printing matched that set and number.");
+      const label = collectorNumber
+        ? `${setCode.toUpperCase()} · ${collectorNumber}`
+        : `${setCode.toUpperCase()} · ${name ?? "?"}`;
+      setError(`No printing matched ${label}. Try Manual lookup if OCR misread the strip.`);
       setPhase("live");
-      return;
+      return false;
     }
     setError("Could not resolve this card.");
     setPhase("live");
+    return false;
   }
 
   async function identifyFromRgba(image: ReturnType<typeof rgbaFromImageSource>) {
@@ -163,16 +189,40 @@ export function Scanner() {
       });
       const setCode = result.best?.parsed.setCode;
       const collectorNumber = result.best?.parsed.collectorNumber;
-      if (!setCode || !collectorNumber) {
-        setError(
-          result.best?.attempt.text
-            ? `Could not parse collector number from “${result.best.attempt.text.trim()}”. Enter set and number manually.`
-            : "OCR found no collector number. Enter set and number manually.",
-        );
-        setPhase("live");
+      const foil = likelyFoil || result.foilLikely;
+
+      if (setCode && collectorNumber) {
+        const ok = await resolveSetNumber(setCode, collectorNumber, foil);
+        if (ok) return;
+        // CN looked plausible but missed — try title + set (modern strip noise).
+        const title = await recognizeCardTitle(image, {
+          engine: engineRef.current,
+          preprocessMode: result.preprocessMode,
+        });
+        if (title.name) {
+          const named = await resolveSetNumber(setCode, undefined, foil, title.name);
+          if (named) return;
+        }
         return;
       }
-      await resolveSetNumber(setCode, collectorNumber, likelyFoil || result.foilLikely);
+
+      if (setCode) {
+        const title = await recognizeCardTitle(image, {
+          engine: engineRef.current,
+          preprocessMode: result.preprocessMode,
+        });
+        if (title.name) {
+          const named = await resolveSetNumber(setCode, undefined, foil, title.name);
+          if (named) return;
+        }
+      }
+
+      setError(
+        result.best?.attempt.text
+          ? `Could not parse collector number from “${result.best.attempt.text.trim()}”. Enter set and number manually.`
+          : "OCR found no collector number. Enter set and number manually.",
+      );
+      setPhase("live");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Identification failed.");
       setPhase("live");
@@ -185,7 +235,9 @@ export function Scanner() {
       setError("Camera is not ready yet.");
       return;
     }
-    const image = rgbaFromImageSource(video, video.videoWidth, video.videoHeight);
+    // Sample the guide overlay region (object-cover + inset), not the raw
+    // sensor buffer — otherwise CN crops read artist / language chrome.
+    const image = rgbaFromVideoGuide(video, SCAN_GUIDE_INSET);
     await identifyFromRgba(image);
   }
 
@@ -208,7 +260,7 @@ export function Scanner() {
     event.preventDefault();
     if (!manualSet.trim() || !manualNumber.trim()) return;
     setPhase("identifying");
-    const defaults = session?.defaults ?? readScanSession(sessionStorage).defaults;
+    const defaults = session.defaults;
     const likelyFoil =
       defaults.finish === "foil" || (defaults.finish === "auto" && finish === "foil");
     await resolveSetNumber(manualSet.trim(), manualNumber.trim(), likelyFoil);
@@ -230,7 +282,7 @@ export function Scanner() {
   }
 
   async function onCommit() {
-    if (!card || !session) return;
+    if (!card) return;
     setPhase("committing");
     setError(null);
     try {
@@ -278,7 +330,6 @@ export function Scanner() {
   }
 
   async function onUndo(entry: ScanSessionEntry) {
-    if (!session) return;
     setUndoingId(entry.id);
     setError(null);
     try {
@@ -308,77 +359,74 @@ export function Scanner() {
     await startCamera(nextId);
   }
 
-  const defaults = session?.defaults;
+  const defaults = session.defaults;
 
   return (
     <div className="flex flex-col gap-4">
-      {session && defaults && (
-        <section
-          aria-label="Session defaults"
-          className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
-        >
-          <h2 className="text-sm font-medium">Session defaults</h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-600 dark:text-zinc-400">Condition</span>
-              <select
-                className="rounded-md border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-                value={defaults.condition}
-                onChange={(e) => {
-                  updateSession(
-                    withDefaults(session, { condition: parseCondition(e.target.value) }),
-                  );
-                }}
-              >
-                {CONDITIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-zinc-600 dark:text-zinc-400">Finish</span>
-              <select
-                className="rounded-md border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-                value={defaults.finish}
-                onChange={(e) => {
-                  updateSession(
-                    withDefaults(session, { finish: parseFinishDefault(e.target.value) }),
-                  );
-                }}
-              >
-                <option value="auto">Auto (foil detect)</option>
-                <option value="nonfoil">Nonfoil</option>
-                <option value="foil">Foil</option>
-                <option value="etched">Etched</option>
-              </select>
-            </label>
-            <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
-              <span className="text-zinc-600 dark:text-zinc-400">Binder</span>
-              <input
-                aria-label="Binder location"
-                placeholder="Optional"
-                value={defaults.binderLocation}
-                onChange={(e) => {
-                  updateSession(withDefaults(session, { binderLocation: e.target.value }));
-                }}
-                className="rounded-md border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-              />
-            </label>
-          </div>
-        </section>
-      )}
+      <section
+        aria-label="Session defaults"
+        className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+      >
+        <h2 className="text-sm font-medium">Session defaults</h2>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-600 dark:text-zinc-400">Condition</span>
+            <select
+              className="rounded-md border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              value={defaults.condition}
+              onChange={(e) => {
+                updateSession(withDefaults(session, { condition: parseCondition(e.target.value) }));
+              }}
+            >
+              {CONDITIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-zinc-600 dark:text-zinc-400">Finish</span>
+            <select
+              className="rounded-md border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              value={defaults.finish}
+              onChange={(e) => {
+                updateSession(
+                  withDefaults(session, { finish: parseFinishDefault(e.target.value) }),
+                );
+              }}
+            >
+              <option value="auto">Auto (foil detect)</option>
+              <option value="nonfoil">Nonfoil</option>
+              <option value="foil">Foil</option>
+              <option value="etched">Etched</option>
+            </select>
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
+            <span className="text-zinc-600 dark:text-zinc-400">Binder</span>
+            <input
+              aria-label="Binder location"
+              placeholder="Optional"
+              value={defaults.binderLocation}
+              onChange={(e) => {
+                updateSession(withDefaults(session, { binderLocation: e.target.value }));
+              }}
+              className="rounded-md border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          </label>
+        </div>
+      </section>
 
       {phase !== "camera_denied" && (
         <div className="relative overflow-hidden rounded-lg bg-black">
           <video ref={videoRef} className="aspect-[3/4] w-full object-cover" playsInline muted />
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-[8%] rounded border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
+            className="pointer-events-none absolute rounded border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
+            style={{ inset: `${SCAN_GUIDE_INSET * 100}%` }}
           />
           <p className="pointer-events-none absolute bottom-3 left-0 right-0 text-center text-xs text-white/90">
-            Align the card to the frame
+            Fill the frame with the card — bottom-left is the set/number strip
           </p>
         </div>
       )}
@@ -468,12 +516,10 @@ export function Scanner() {
               {card.sharedArt ? " · shared art" : ""}
               {foilLikely ? " · foil likely" : ""}
             </p>
-            {defaults && (
-              <p className="mt-1 text-xs text-zinc-500">
-                Commits as {defaults.condition}
-                {defaults.binderLocation ? ` · ${defaults.binderLocation}` : ""}
-              </p>
-            )}
+            <p className="mt-1 text-xs text-zinc-500">
+              Commits as {defaults.condition}
+              {defaults.binderLocation ? ` · ${defaults.binderLocation}` : ""}
+            </p>
           </div>
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Finish</span>
@@ -514,7 +560,7 @@ export function Scanner() {
         </section>
       )}
 
-      {session && session.entries.length > 0 && (
+      {session.entries.length > 0 && (
         <section aria-label="Session commits" className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">This session ({session.entries.length})</h2>
           <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
@@ -547,12 +593,7 @@ export function Scanner() {
         </section>
       )}
 
-      <form
-        onSubmit={(event) => {
-          void onManualResolve(event);
-        }}
-        className="flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800"
-      >
+      <div className="flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
         <h2 className="text-sm font-medium">Manual lookup</h2>
         <div className="flex gap-2">
           <input
@@ -571,16 +612,25 @@ export function Scanner() {
             onChange={(e) => {
               setManualNumber(e.target.value);
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void onManualResolve({ preventDefault() {} });
+              }
+            }}
             className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           />
           <button
-            type="submit"
+            type="button"
+            onClick={() => {
+              void onManualResolve({ preventDefault() {} });
+            }}
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700"
           >
             Look up
           </button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }

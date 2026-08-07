@@ -14,10 +14,16 @@ import {
  * KAD-49 undo).
  */
 
-export const scanResolveRequestSchema = z.object({
-  setCode: setCodeSchema,
-  collectorNumber: collectorNumberSchema,
-});
+export const scanResolveRequestSchema = z
+  .object({
+    setCode: setCodeSchema,
+    collectorNumber: collectorNumberSchema.optional(),
+    /** Title-bar OCR fallback when the CN strip is ambiguous. */
+    name: z.string().min(1).max(120).optional(),
+  })
+  .refine((value) => Boolean(value.collectorNumber || value.name), {
+    message: "Either collectorNumber or name is required",
+  });
 export type ScanResolveRequest = z.infer<typeof scanResolveRequestSchema>;
 
 export const scanResolvedCardSchema = z.object({

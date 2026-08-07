@@ -14,6 +14,20 @@ describe("scanResolveRequestSchema", () => {
   it("rejects an empty collector number", () => {
     expect(() => scanResolveRequestSchema.parse({ setCode: "fdn", collectorNumber: "" })).toThrow();
   });
+
+  it("accepts name + set without a collector number", () => {
+    const parsed = scanResolveRequestSchema.parse({
+      setCode: "SOS",
+      name: "Chase Inspiration",
+    });
+    expect(parsed.setCode).toBe("sos");
+    expect(parsed.name).toBe("Chase Inspiration");
+    expect(parsed.collectorNumber).toBeUndefined();
+  });
+
+  it("rejects a request with neither name nor collector number", () => {
+    expect(() => scanResolveRequestSchema.parse({ setCode: "sos" })).toThrow();
+  });
 });
 
 describe("scanCommitRequestSchema", () => {

@@ -34,23 +34,25 @@ describe("recognizeCollectorNumber", () => {
     return { width, height, data };
   }
 
-  it("stops early when the first strategy clears the threshold", async () => {
+  it("stops early after split number+set lines clear the threshold", async () => {
     let calls = 0;
     const engine: OcrEngine = {
       recognize: () => {
         calls += 1;
+        // Call 1 = number line, call 2 = set line; both return a full parse so
+        // the merged result early-exits before combined-strip fallbacks.
         return Promise.resolve({ text: "FDN U 0125", confidence: 0.95 });
       },
     };
     const result = await recognizeCollectorNumber(solid(100, 140), { engine });
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
     expect(result.best?.parsed.setCode).toBe("fdn");
     expect(result.best?.parsed.collectorNumber).toBe("0125");
-    expect(result.attempts).toHaveLength(1);
+    expect(result.attempts.length).toBeGreaterThanOrEqual(2);
   });
 
   it("tries further strategies when the first parse is weak", async () => {
-    const texts = ["xx", "garbage", "MH2 250", "unused"];
+    const texts = ["xx", "garbage", "xx", "MH2 250", "unused"];
     let i = 0;
     const engine: OcrEngine = {
       recognize: () => {
@@ -60,7 +62,7 @@ describe("recognizeCollectorNumber", () => {
       },
     };
     const result = await recognizeCollectorNumber(solid(100, 140), { engine });
-    expect(i).toBeGreaterThan(1);
+    expect(i).toBeGreaterThan(2);
     expect(result.best?.parsed.setCode).toBe("mh2");
     expect(result.best?.parsed.collectorNumber).toBe("250");
   });
