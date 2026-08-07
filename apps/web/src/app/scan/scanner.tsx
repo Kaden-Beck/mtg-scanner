@@ -460,7 +460,7 @@ export function Scanner() {
         </label>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2">
         {phase !== "camera_denied" && (
           <button
             type="button"
@@ -468,7 +468,7 @@ export function Scanner() {
             onClick={() => {
               void captureFromVideo();
             }}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+            className="w-full rounded-md bg-zinc-900 px-4 py-3 text-base font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
           >
             {phase === "identifying" ? "Reading…" : "Capture"}
           </button>
@@ -476,7 +476,7 @@ export function Scanner() {
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="rounded-md border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700"
+          className="w-full rounded-md border border-zinc-300 px-4 py-2.5 text-sm dark:border-zinc-700"
         >
           Upload photo
         </button>
