@@ -71,11 +71,10 @@ the set for those — don't leave them to the end.
 
 ## Step 3 — Shoot
 
-Use your phone's **ordinary built-in camera app**. There is nothing to run,
-nothing to serve, and your phone never talks to this project — the scanner
-does not exist yet, and building it is Sprint 7. That is the entire point of
-the corpus: it has to exist *before* the scanner, so there is something to
-measure the scanner against.
+Use your phone's **ordinary built-in camera app** for the corpus shoot —
+not `/scan`. The live scanner exists now (OCR-primary, ADR-008), but the
+corpus still has to be shot the way you actually hold a phone over a table,
+without guide-frame help, so the gate measures the hard case.
 
 Phone, handheld, over a table. **Not** a copy stand or a lightbox: that
 produces a corpus the scanner aces and reality fails.
@@ -211,9 +210,9 @@ mild over-estimate. Worth remembering rather than being surprised by.
 
 ## What happens next
 
-Once the corpus exists and a recognizer lands (T1, KAD-40), the harness runs
-it and records `tests/corpus/baseline.json`. From then on CI fails any change
+Once the corpus exists, run the OCR-primary harness (`pnpm corpus:gate`) and
+record `tests/corpus/baseline.json` (KAD-41). From then on CI fails any change
 that drops accuracy by more than one percentage point.
 
 If the first numbers are bad, **that is the finding, not a failure** — KAD-41
-says so explicitly, and the corpus tells you exactly where it breaks.
+says so explicitly, and the corpus tells you exactly where OCR breaks.

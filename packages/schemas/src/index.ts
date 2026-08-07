@@ -65,13 +65,19 @@ export {
 } from "./import";
 export {
   type ScanCommitRequest,
+  type ScanCommitResponse,
   type ScanResolvedCard,
   type ScanResolveRequest,
   type ScanResolveResponse,
+  type ScanUndoRequest,
+  type ScanUndoResponse,
   scanCommitRequestSchema,
+  scanCommitResponseSchema,
   scanResolvedCardSchema,
   scanResolveRequestSchema,
   scanResolveResponseSchema,
+  scanUndoRequestSchema,
+  scanUndoResponseSchema,
 } from "./scan";
 export {
   isCollectibleCard,

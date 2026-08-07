@@ -31,7 +31,7 @@ const CORPUS_DIR = resolve(
 async function main(): Promise<void> {
   if (!existsSync(resolve(CORPUS_DIR, "labels.json"))) {
     console.log("No tests/corpus/labels.json yet - nothing to measure.");
-    console.log("Label the corpus (pnpm corpus:label / corpus:from-manabox) first.");
+    console.log("Label the corpus (pnpm corpus:label) first.");
     return;
   }
 

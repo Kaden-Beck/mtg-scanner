@@ -11,8 +11,8 @@ export default function ScanPage() {
         </Link>
       </div>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Align a card to the guide frame, capture, and confirm. Collector number is read with OCR and
-        matched exactly against your local card database.
+        Align a card to the guide frame, capture, and confirm. Session defaults apply to every
+        commit; the running list below supports one-tap undo.
       </p>
       <Scanner />
     </main>

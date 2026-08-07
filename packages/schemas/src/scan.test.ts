@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scanCommitRequestSchema, scanResolveRequestSchema } from "./scan";
+import { scanCommitRequestSchema, scanResolveRequestSchema, scanUndoRequestSchema } from "./scan";
 
 describe("scanResolveRequestSchema", () => {
   it("lowercases the set code", () => {
@@ -26,5 +26,16 @@ describe("scanCommitRequestSchema", () => {
     expect(parsed.condition).toBe("NM");
     expect(parsed.quantity).toBe(1);
     expect(parsed.language).toBe("en");
+  });
+});
+
+describe("scanUndoRequestSchema", () => {
+  it("requires a positive quantity delta", () => {
+    const id = "0000419b-0bba-4488-8f7a-6194544ce91e";
+    expect(() => scanUndoRequestSchema.parse({ collectionItemId: id, quantityDelta: 0 })).toThrow();
+    expect(scanUndoRequestSchema.parse({ collectionItemId: id, quantityDelta: 1 })).toEqual({
+      collectionItemId: id,
+      quantityDelta: 1,
+    });
   });
 });

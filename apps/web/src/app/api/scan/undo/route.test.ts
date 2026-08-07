@@ -10,7 +10,7 @@ const scryfallId = "0000419b-0bba-4488-8f7a-6194544ce91e";
 
 beforeEach(() => {
   vi.resetModules();
-  dir = mkdtempSync(join(tmpdir(), "mtg-scan-commit-test-"));
+  dir = mkdtempSync(join(tmpdir(), "mtg-scan-undo-route-test-"));
   process.env["DATABASE_PATH"] = join(dir, "test.db");
   process.env["DRIZZLE_MIGRATIONS_FOLDER"] = join(import.meta.dirname, "../../../../../drizzle");
 });
@@ -66,60 +66,49 @@ async function seedCard() {
   });
 }
 
-describe("POST /api/scan/commit", () => {
-  it("creates a new collection stack", async () => {
+describe("POST /api/scan/undo", () => {
+  it("undoes a committed scan", async () => {
     await seedCard();
-    const { POST } = await import("./route");
-    const request = new NextRequest("http://localhost/api/scan/commit", {
-      method: "POST",
-      body: JSON.stringify({ scryfallId, finish: "nonfoil" }),
-    });
-    const response = await POST(request);
-    expect(response.status).toBe(201);
-    const body = (await response.json()) as {
-      item: { scryfallId: string; quantity: number; condition: string; finish: string; id: string };
+    const { POST: commit } = await import("../commit/route");
+    const { POST: undo } = await import("./route");
+
+    const committed = await commit(
+      new NextRequest("http://localhost/api/scan/commit", {
+        method: "POST",
+        body: JSON.stringify({ scryfallId, finish: "nonfoil" }),
+      }),
+    );
+    const commitBody = (await committed.json()) as {
+      item: { id: string };
       quantityAdded: number;
     };
-    expect(body.item.scryfallId).toBe(scryfallId);
-    expect(body.item.quantity).toBe(1);
-    expect(body.item.condition).toBe("NM");
-    expect(body.quantityAdded).toBe(1);
-    expect(body.item.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-  });
+    expect(commitBody.quantityAdded).toBe(1);
 
-  it("merges quantity on a second scan of the same stack", async () => {
-    await seedCard();
-    const { POST } = await import("./route");
-    const payload = { scryfallId, finish: "foil", condition: "LP", quantity: 1 };
-    const first = await POST(
-      new NextRequest("http://localhost/api/scan/commit", {
+    const response = await undo(
+      new NextRequest("http://localhost/api/scan/undo", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          collectionItemId: commitBody.item.id,
+          quantityDelta: commitBody.quantityAdded,
+        }),
       }),
     );
-    expect(first.status).toBe(201);
-    const second = await POST(
-      new NextRequest("http://localhost/api/scan/commit", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }),
-    );
-    expect(second.status).toBe(201);
-    const body = (await second.json()) as { item: { quantity: number; finish: string } };
-    expect(body.item.quantity).toBe(2);
-    expect(body.item.finish).toBe("foil");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { outcome: string };
+    expect(body.outcome).toBe("deleted");
   });
 
-  it("returns 404 for an unknown printing", async () => {
+  it("returns 404 when the stack is already gone", async () => {
     const { POST } = await import("./route");
-    const request = new NextRequest("http://localhost/api/scan/commit", {
-      method: "POST",
-      body: JSON.stringify({
-        scryfallId: "0000419b-0bba-4488-8f7a-6194544ce91e",
-        finish: "nonfoil",
+    const response = await POST(
+      new NextRequest("http://localhost/api/scan/undo", {
+        method: "POST",
+        body: JSON.stringify({
+          collectionItemId: "0000419b-0bba-4488-8f7a-6194544ce91e",
+          quantityDelta: 1,
+        }),
       }),
-    });
-    const response = await POST(request);
+    );
     expect(response.status).toBe(404);
   });
 });

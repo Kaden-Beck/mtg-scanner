@@ -1,7 +1,14 @@
 "use client";
 
 import { detectFoilCard, recognizeCollectorNumber } from "@mtg/scan-ocr";
-import { type Finish, finishSchema, type ScanResolvedCard } from "@mtg/schemas";
+import {
+  CONDITIONS,
+  type Condition,
+  conditionSchema,
+  type Finish,
+  finishSchema,
+  type ScanResolvedCard,
+} from "@mtg/schemas";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   buildVideoConstraints,
@@ -9,6 +16,17 @@ import {
   readStoredDeviceId,
   writeStoredDeviceId,
 } from "./camera";
+import {
+  type FinishDefault,
+  readScanSession,
+  resolveCommitFinish,
+  type ScanSessionEntry,
+  type ScanSessionState,
+  withDefaults,
+  withEntryAppended,
+  withEntryRemoved,
+  writeScanSession,
+} from "./session";
 import { createTesseractEngine, rgbaFromImageSource } from "./tesseract-engine";
 
 type Phase = "live" | "identifying" | "confirm" | "committing" | "done" | "camera_denied";
@@ -25,6 +43,14 @@ function isResolveMiss(body: unknown): body is { ok: false; suggestions: string[
   return "ok" in body && body.ok === false;
 }
 
+function isCommitOk(body: unknown): body is { item: { id: string }; quantityAdded: number } {
+  if (typeof body !== "object" || body === null) return false;
+  if (!("item" in body) || typeof body.item !== "object" || body.item === null) return false;
+  if (!("id" in body.item) || typeof body.item.id !== "string") return false;
+  if (!("quantityAdded" in body) || typeof body.quantityAdded !== "number") return false;
+  return true;
+}
+
 export function Scanner() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -37,10 +63,12 @@ export function Scanner() {
   const [error, setError] = useState<string | null>(null);
   const [card, setCard] = useState<ScanResolvedCard | null>(null);
   const [finish, setFinish] = useState<Finish>("nonfoil");
+  const [foilLikely, setFoilLikely] = useState(false);
   const [manualSet, setManualSet] = useState("");
   const [manualNumber, setManualNumber] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [lastCommitted, setLastCommitted] = useState<string | null>(null);
+  const [session, setSession] = useState<ScanSessionState | null>(null);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => {
@@ -81,10 +109,9 @@ export function Scanner() {
   );
 
   useEffect(() => {
-    // Defer so setState from getUserMedia isn't synchronous in the effect body
-    // (react-hooks/set-state-in-effect) — same timer pattern as CardSearch.
     const stored = readStoredDeviceId(localStorage);
     const timer = setTimeout(() => {
+      setSession(readScanSession(sessionStorage));
       void startCamera(stored);
     }, 0);
     return () => {
@@ -93,7 +120,12 @@ export function Scanner() {
     };
   }, [startCamera, stopStream]);
 
-  async function resolveSetNumber(setCode: string, collectorNumber: string, foilLikely: boolean) {
+  function updateSession(next: ScanSessionState) {
+    setSession(next);
+    writeScanSession(sessionStorage, next);
+  }
+
+  async function resolveSetNumber(setCode: string, collectorNumber: string, likelyFoil: boolean) {
     const response = await fetch("/api/scan/resolve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -102,7 +134,9 @@ export function Scanner() {
     const body: unknown = await response.json();
     if (isResolveOk(body)) {
       setCard(body.card);
-      setFinish(foilLikely ? "foil" : "nonfoil");
+      setFoilLikely(likelyFoil);
+      const defaults = session?.defaults ?? readScanSession(sessionStorage).defaults;
+      setFinish(resolveCommitFinish(defaults, likelyFoil));
       setSuggestions([]);
       setPhase("confirm");
       return;
@@ -123,7 +157,7 @@ export function Scanner() {
     setSuggestions([]);
     try {
       engineRef.current ??= createTesseractEngine();
-      const foilLikely = detectFoilCard(image);
+      const likelyFoil = detectFoilCard(image);
       const result = await recognizeCollectorNumber(image, {
         engine: engineRef.current,
       });
@@ -138,7 +172,7 @@ export function Scanner() {
         setPhase("live");
         return;
       }
-      await resolveSetNumber(setCode, collectorNumber, foilLikely || result.foilLikely);
+      await resolveSetNumber(setCode, collectorNumber, likelyFoil || result.foilLikely);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Identification failed.");
       setPhase("live");
@@ -174,7 +208,10 @@ export function Scanner() {
     event.preventDefault();
     if (!manualSet.trim() || !manualNumber.trim()) return;
     setPhase("identifying");
-    await resolveSetNumber(manualSet.trim(), manualNumber.trim(), finish === "foil");
+    const defaults = session?.defaults ?? readScanSession(sessionStorage).defaults;
+    const likelyFoil =
+      defaults.finish === "foil" || (defaults.finish === "auto" && finish === "foil");
+    await resolveSetNumber(manualSet.trim(), manualNumber.trim(), likelyFoil);
   }
 
   function parseFinish(value: string): Finish {
@@ -182,8 +219,18 @@ export function Scanner() {
     return parsed.success ? parsed.data : "nonfoil";
   }
 
+  function parseFinishDefault(value: string): FinishDefault {
+    if (value === "auto") return "auto";
+    return parseFinish(value);
+  }
+
+  function parseCondition(value: string): Condition {
+    const parsed = conditionSchema.safeParse(value);
+    return parsed.success ? parsed.data : "NM";
+  }
+
   async function onCommit() {
-    if (!card) return;
+    if (!card || !session) return;
     setPhase("committing");
     setError(null);
     try {
@@ -193,8 +240,9 @@ export function Scanner() {
         body: JSON.stringify({
           scryfallId: card.scryfallId,
           finish,
-          condition: "NM",
+          condition: session.defaults.condition,
           quantity: 1,
+          binderLocation: session.defaults.binderLocation,
         }),
       });
       if (!response.ok) {
@@ -202,12 +250,55 @@ export function Scanner() {
         setPhase("confirm");
         return;
       }
-      setLastCommitted(card.name);
+      const body: unknown = await response.json();
+      if (!isCommitOk(body)) {
+        setError("Commit failed.");
+        setPhase("confirm");
+        return;
+      }
+      const entry: ScanSessionEntry = {
+        id: crypto.randomUUID(),
+        collectionItemId: body.item.id,
+        scryfallId: card.scryfallId,
+        name: card.name,
+        setCode: card.setCode,
+        collectorNumber: card.collectorNumber,
+        finish,
+        condition: session.defaults.condition,
+        quantityDelta: body.quantityAdded,
+        committedAt: new Date().toISOString(),
+      };
+      updateSession(withEntryAppended(session, entry));
       setCard(null);
       setPhase("live");
     } catch {
       setError("Commit failed.");
       setPhase("confirm");
+    }
+  }
+
+  async function onUndo(entry: ScanSessionEntry) {
+    if (!session) return;
+    setUndoingId(entry.id);
+    setError(null);
+    try {
+      const response = await fetch("/api/scan/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          collectionItemId: entry.collectionItemId,
+          quantityDelta: entry.quantityDelta,
+        }),
+      });
+      if (!response.ok && response.status !== 404) {
+        setError("Undo failed.");
+        return;
+      }
+      updateSession(withEntryRemoved(session, entry.id));
+    } catch {
+      setError("Undo failed.");
+    } finally {
+      setUndoingId(null);
     }
   }
 
@@ -217,12 +308,71 @@ export function Scanner() {
     await startCamera(nextId);
   }
 
+  const defaults = session?.defaults;
+
   return (
     <div className="flex flex-col gap-4">
+      {session && defaults && (
+        <section
+          aria-label="Session defaults"
+          className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+        >
+          <h2 className="text-sm font-medium">Session defaults</h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-600 dark:text-zinc-400">Condition</span>
+              <select
+                className="rounded-md border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+                value={defaults.condition}
+                onChange={(e) => {
+                  updateSession(
+                    withDefaults(session, { condition: parseCondition(e.target.value) }),
+                  );
+                }}
+              >
+                {CONDITIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-600 dark:text-zinc-400">Finish</span>
+              <select
+                className="rounded-md border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+                value={defaults.finish}
+                onChange={(e) => {
+                  updateSession(
+                    withDefaults(session, { finish: parseFinishDefault(e.target.value) }),
+                  );
+                }}
+              >
+                <option value="auto">Auto (foil detect)</option>
+                <option value="nonfoil">Nonfoil</option>
+                <option value="foil">Foil</option>
+                <option value="etched">Etched</option>
+              </select>
+            </label>
+            <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
+              <span className="text-zinc-600 dark:text-zinc-400">Binder</span>
+              <input
+                aria-label="Binder location"
+                placeholder="Optional"
+                value={defaults.binderLocation}
+                onChange={(e) => {
+                  updateSession(withDefaults(session, { binderLocation: e.target.value }));
+                }}
+                className="rounded-md border border-zinc-300 bg-white px-2 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+          </div>
+        </section>
+      )}
+
       {phase !== "camera_denied" && (
         <div className="relative overflow-hidden rounded-lg bg-black">
           <video ref={videoRef} className="aspect-[3/4] w-full object-cover" playsInline muted />
-          {/* Guide frame: user aligns the physical card to this rectangle. */}
           <div
             aria-hidden
             className="pointer-events-none absolute inset-[8%] rounded border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
@@ -306,12 +456,6 @@ export function Scanner() {
         </p>
       )}
 
-      {lastCommitted && (
-        <p role="status" className="text-sm text-green-700 dark:text-green-400">
-          Added {lastCommitted} to collection.
-        </p>
-      )}
-
       {(phase === "confirm" || phase === "committing") && card && (
         <section
           aria-label="Confirm scanned card"
@@ -322,7 +466,14 @@ export function Scanner() {
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               {card.setCode.toUpperCase()} · {card.collectorNumber}
               {card.sharedArt ? " · shared art" : ""}
+              {foilLikely ? " · foil likely" : ""}
             </p>
+            {defaults && (
+              <p className="mt-1 text-xs text-zinc-500">
+                Commits as {defaults.condition}
+                {defaults.binderLocation ? ` · ${defaults.binderLocation}` : ""}
+              </p>
+            )}
           </div>
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Finish</span>
@@ -360,6 +511,39 @@ export function Scanner() {
               Cancel
             </button>
           </div>
+        </section>
+      )}
+
+      {session && session.entries.length > 0 && (
+        <section aria-label="Session commits" className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium">This session ({session.entries.length})</h2>
+          <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            {session.entries.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{entry.name}</p>
+                  <p className="text-xs text-zinc-500">
+                    {entry.setCode.toUpperCase()} · {entry.collectorNumber} · {entry.finish} ·{" "}
+                    {entry.condition}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Undo ${entry.name}`}
+                  disabled={undoingId === entry.id}
+                  onClick={() => {
+                    void onUndo(entry);
+                  }}
+                  className="shrink-0 rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700"
+                >
+                  {undoingId === entry.id ? "…" : "Undo"}
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
