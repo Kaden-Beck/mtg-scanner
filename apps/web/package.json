@@ -15,9 +15,10 @@
     "corpus:label": "node --experimental-strip-types src/server/corpus/label-cli.ts"
   },
   "dependencies": {
+    "@mtg/corpus": "workspace:*",
     "@mtg/phash": "workspace:*",
     "@mtg/query-parser": "workspace:*",
-    "@mtg/corpus": "workspace:*",
+    "@mtg/scan-ocr": "workspace:*",
     "@mtg/schemas": "workspace:*",
     "better-sqlite3": "13.0.2",
     "drizzle-orm": "0.45.2",
@@ -25,6 +26,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sharp": "^0.35.3",
+    "tesseract.js": "^7.0.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
